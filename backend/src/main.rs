@@ -1,5 +1,7 @@
 mod config;
 mod db;
+mod error;
+mod helpers;
 
 use axum::{extract::State, routing::get, Json, Router};
 use serde_json::json;

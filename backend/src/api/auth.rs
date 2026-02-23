@@ -84,13 +84,19 @@ pub async fn callback(
 
     let email = userinfo.email.unwrap_or_default();
 
+    // Determine the role: the very first user gets "admin", everyone after gets "editor".
+    let user_count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM users")
+        .fetch_one(&state.db)
+        .await?;
+    let role = if user_count == 0 { "admin" } else { "editor" };
+
     // Upsert the user. On conflict (same external_id) we update mutable fields
     // so changes on the IdP side (new email, display name) are reflected here.
     // We use RETURNING to get the internal UUID without a second query.
     let user_id = sqlx::query_scalar::<_, String>(
         r#"
-        INSERT INTO users (id, external_id, email, display_name, last_login)
-        VALUES (?, ?, ?, ?, datetime('now'))
+        INSERT INTO users (id, external_id, email, display_name, role, last_login)
+        VALUES (?, ?, ?, ?, ?, datetime('now'))
         ON CONFLICT(external_id) DO UPDATE SET
             email        = excluded.email,
             display_name = excluded.display_name,
@@ -102,6 +108,7 @@ pub async fn callback(
     .bind(&userinfo.sub)
     .bind(&email)
     .bind(&display_name)
+    .bind(role)
     .fetch_one(&state.db)
     .await?;
 

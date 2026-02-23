@@ -108,7 +108,7 @@ async fn main() {
     // 2. Auth routes — handle the OAuth2 flow; deliberately unprotected so
     //    unauthenticated users can reach them.
     let auth_routes = Router::new()
-        .route("/api/auth/login", post(api::auth::login))
+        .route("/api/auth/login", get(api::auth::login))
         .route("/api/auth/callback", get(api::auth::callback))
         .route("/api/auth/logout", post(api::auth::logout));
 

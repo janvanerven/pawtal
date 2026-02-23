@@ -1,5 +1,5 @@
 # ── Stage 1: Build Rust backend ───────────────────────────────────────────────
-FROM rust:1.84-bookworm AS backend-builder
+FROM rust:1-bookworm AS backend-builder
 WORKDIR /app/backend
 
 # Copy manifests first so cargo can cache the dependency-compilation layer.

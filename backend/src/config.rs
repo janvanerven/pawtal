@@ -5,7 +5,7 @@ use serde::Deserialize;
 /// All fields map directly to environment variable names (uppercased by envy).
 /// Provide defaults via `.env` for local development; override via real env
 /// vars in production / Docker.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     /// TCP port the HTTP server listens on.
     #[serde(default = "default_port")]

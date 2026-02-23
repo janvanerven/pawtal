@@ -1,10 +1,20 @@
 mod config;
+mod db;
 
-use axum::{routing::get, Json, Router};
-use serde_json::{json, Value};
+use axum::{extract::State, routing::get, Json, Router};
+use serde_json::json;
+use sqlx::SqlitePool;
 use std::net::SocketAddr;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+
+/// Shared application state passed to every handler via Axum's `State`
+/// extractor. Must be `Clone` — Axum clones it once per request.
+#[derive(Clone)]
+pub struct AppState {
+    pub db: SqlitePool,
+    pub config: config::Config,
+}
 
 #[tokio::main]
 async fn main() {
@@ -21,9 +31,38 @@ async fn main() {
 
     let config = config::Config::from_env();
 
-    let app = Router::new().route("/api/health", get(health));
+    // Ensure the directory that will contain the SQLite file exists.
+    // The database_url looks like "sqlite:data/pawtal.db?mode=rwc"; we strip
+    // the scheme prefix and any query string to get the bare file path.
+    let db_path = config
+        .database_url
+        .strip_prefix("sqlite:")
+        .unwrap_or(&config.database_url)
+        .split('?')
+        .next()
+        .unwrap_or("data/pawtal.db");
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
+    if let Some(parent) = std::path::Path::new(db_path).parent() {
+        std::fs::create_dir_all(parent).unwrap_or_else(|e| {
+            panic!("failed to create database directory '{parent:?}': {e}");
+        });
+    }
+
+    let pool = db::create_pool(&config.database_url)
+        .await
+        .expect("failed to connect to database and run migrations");
+
+    // Capture the port before `config` is moved into AppState, so we can use
+    // it when binding the listener below.
+    let port = config.port;
+
+    let state = AppState { db: pool, config };
+
+    let app = Router::new()
+        .route("/api/health", get(health_check))
+        .with_state(state);
+
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
     info!("listening on {addr}");
 
     let listener = tokio::net::TcpListener::bind(addr)
@@ -36,7 +75,16 @@ async fn main() {
 }
 
 /// `GET /api/health` — liveness probe for load balancers and Docker health
-/// checks. Returns 200 OK with a static JSON body.
-async fn health() -> Json<Value> {
-    Json(json!({ "status": "ok" }))
+/// checks. Runs a trivial DB query so infrastructure can detect database
+/// connectivity issues in addition to process liveness.
+async fn health_check(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let db_ok = sqlx::query_scalar::<_, i32>("SELECT 1")
+        .fetch_one(&state.db)
+        .await
+        .is_ok();
+
+    Json(json!({
+        "status": if db_ok { "ok" } else { "degraded" },
+        "db": db_ok
+    }))
 }

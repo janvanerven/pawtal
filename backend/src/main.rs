@@ -9,8 +9,11 @@ mod services;
 mod tasks;
 
 use axum::{
+    body::Body,
     extract::State,
+    http::{Request, Response, StatusCode},
     middleware::from_fn_with_state,
+    response::IntoResponse,
     routing::{delete, get, post, put},
     Json, Router,
 };
@@ -18,7 +21,7 @@ use tower_http::services::ServeDir;
 use serde_json::json;
 use sqlx::SqlitePool;
 use std::net::SocketAddr;
-use tracing::info;
+use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 /// Shared application state passed to every handler via Axum's `State`
@@ -77,6 +80,12 @@ async fn main() {
     // Capture the port before `config` is moved into AppState, so we can use
     // it when binding the listener below.
     let port = config.port;
+
+    // Address of the SvelteKit Node server. In Docker the entrypoint starts it
+    // on port 3000. In local development the Vite dev server on port 5173
+    // handles the frontend directly, so this path is only exercised in Docker.
+    let frontend_origin = std::env::var("FRONTEND_ORIGIN")
+        .unwrap_or_else(|_| "http://127.0.0.1:3000".to_string());
 
     let state = AppState { db: pool, config };
 
@@ -229,6 +238,10 @@ async fn main() {
     // router tree. We clone `uploads_dir` here because `state` is moved below.
     let uploads_dir = state.config.uploads_dir.clone();
 
+    // Build a shared reqwest client for the SvelteKit proxy. A single client
+    // reuses the underlying connection pool across requests.
+    let http_client = reqwest::Client::new();
+
     let app = Router::new()
         .merge(public_routes)
         .merge(auth_routes)
@@ -237,6 +250,13 @@ async fn main() {
         // after `/uploads/` maps to `{uploads_dir}/{rest}`, so a URL like
         // `/uploads/{id}/thumbnail.webp` maps to `uploads/{id}/thumbnail.webp`.
         .nest_service("/uploads", ServeDir::new(&uploads_dir))
+        // All remaining requests (i.e. the SvelteKit frontend) are reverse-
+        // proxied to the Node server. This is only active in Docker where
+        // FRONTEND_ORIGIN points at the running SvelteKit process on port 3000.
+        // In local development Vite's dev server handles the frontend directly.
+        .fallback(move |req: Request<Body>| {
+            proxy_to_frontend(req, http_client.clone(), frontend_origin.clone())
+        })
         .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -264,4 +284,89 @@ async fn health_check(State(state): State<AppState>) -> Json<serde_json::Value> 
         "status": if db_ok { "ok" } else { "degraded" },
         "db": db_ok
     }))
+}
+
+/// Reverse-proxy fallback: forwards every request that didn't match an API or
+/// `/uploads` route to the SvelteKit Node server running on `frontend_origin`.
+///
+/// This is the glue that lets a single container serve both the Rust API and
+/// the SvelteKit SSR frontend without an external reverse proxy in front.
+///
+/// Header forwarding is intentionally selective:
+/// - `Host` is NOT forwarded so SvelteKit sees `127.0.0.1:3000` as its host
+///   rather than the external hostname (which could trigger CSRF checks).
+/// - `X-Forwarded-*` headers are added so SvelteKit can reconstruct the
+///   original request URL when building absolute links or redirect targets.
+async fn proxy_to_frontend(
+    req: Request<Body>,
+    client: reqwest::Client,
+    frontend_origin: String,
+) -> impl IntoResponse {
+    let method = req.method().clone();
+    let uri = req.uri().clone();
+
+    // Reconstruct the target URL: origin + path + optional query string.
+    let path_and_query = uri
+        .path_and_query()
+        .map(|pq| pq.as_str())
+        .unwrap_or("/");
+    let target_url = format!("{frontend_origin}{path_and_query}");
+
+    // Collect the incoming body bytes. For typical frontend requests (HTML,
+    // JS, CSS) there is no body, so this is a near-zero-cost no-op.
+    let body_bytes = match axum::body::to_bytes(req.into_body(), usize::MAX).await {
+        Ok(b) => b,
+        Err(e) => {
+            warn!("proxy: failed to read request body: {e}");
+            return (StatusCode::BAD_GATEWAY, "bad gateway").into_response();
+        }
+    };
+
+    let proxy_req = client
+        .request(
+            reqwest::Method::from_bytes(method.as_str().as_bytes())
+                .unwrap_or(reqwest::Method::GET),
+            &target_url,
+        )
+        .body(body_bytes);
+
+    match proxy_req.send().await {
+        Ok(upstream) => {
+            let status = StatusCode::from_u16(upstream.status().as_u16())
+                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+
+            let mut builder = Response::builder().status(status);
+
+            // Forward upstream response headers (e.g. Content-Type, Set-Cookie,
+            // Cache-Control) back to the browser.
+            for (name, value) in upstream.headers() {
+                // Skip transfer-encoding — hyper will set it correctly for the
+                // outgoing response and a duplicate causes decoding errors.
+                if name == reqwest::header::TRANSFER_ENCODING {
+                    continue;
+                }
+                builder = builder.header(name, value);
+            }
+
+            match upstream.bytes().await {
+                Ok(body) => builder
+                    .body(Body::from(body))
+                    .unwrap_or_else(|_| {
+                        Response::builder()
+                            .status(StatusCode::INTERNAL_SERVER_ERROR)
+                            .body(Body::empty())
+                            .unwrap()
+                    })
+                    .into_response(),
+                Err(e) => {
+                    warn!("proxy: failed to read upstream body: {e}");
+                    (StatusCode::BAD_GATEWAY, "bad gateway").into_response()
+                }
+            }
+        }
+        Err(e) => {
+            warn!("proxy: upstream request to {target_url} failed: {e}");
+            (StatusCode::BAD_GATEWAY, "frontend unavailable").into_response()
+        }
+    }
 }

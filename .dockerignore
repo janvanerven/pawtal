@@ -1,0 +1,10 @@
+target/
+node_modules/
+.git/
+.claude/
+*.md
+.env
+backend/data/
+backend/uploads/
+frontend/build/
+frontend/.svelte-kit/

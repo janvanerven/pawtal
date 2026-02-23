@@ -1,0 +1,29 @@
+services:
+  pawtal:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - pawtal-data:/app/data
+      - pawtal-uploads:/app/uploads
+    environment:
+      - DATABASE_URL=sqlite:/app/data/pawtal.db?mode=rwc
+      - UPLOADS_DIR=/app/uploads
+      - OAUTH2_CLIENT_ID=${OAUTH2_CLIENT_ID}
+      - OAUTH2_CLIENT_SECRET=${OAUTH2_CLIENT_SECRET}
+      - OAUTH2_ISSUER_URL=${OAUTH2_ISSUER_URL}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - BASE_URL=${BASE_URL}
+      # ORIGIN must match the public URL so SvelteKit CSRF checks pass.
+      - ORIGIN=${BASE_URL}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  pawtal-data:
+  pawtal-uploads:

@@ -126,7 +126,7 @@
 
   function handleMediaSelect(event: CustomEvent<import('$lib/api/types').Media>) {
     const media = event.detail;
-    const imgUrl = `/uploads/${media.filename}`;
+    const imgUrl = `/uploads/${media.id}/${media.filename}`;
     // We need a reference to the editor — use a custom event dispatched up
     // For now insert via document event so RichTextEditor can catch it
     window.dispatchEvent(new CustomEvent('rte:insert-image', { detail: { src: imgUrl, alt: media.alt_text || media.original_filename } }));

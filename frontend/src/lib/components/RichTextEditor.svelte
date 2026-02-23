@@ -43,6 +43,11 @@
     isCodeBlock = editor.isActive('codeBlock');
   }
 
+  function handleInsertImage(e: Event) {
+    const { src, alt } = (e as CustomEvent).detail;
+    editor?.chain().focus().setImage({ src, alt }).run();
+  }
+
   onMount(() => {
     editor = new Editor({
       element: editorElement,
@@ -60,16 +65,21 @@
       onSelectionUpdate: () => updateActiveStates(),
       onTransaction: () => updateActiveStates(),
     });
+
+    window.addEventListener('rte:insert-image', handleInsertImage);
   });
 
   onDestroy(() => {
+    window.removeEventListener('rte:insert-image', handleInsertImage);
     editor?.destroy();
   });
 
-  // Sync external content changes (e.g., when loading a saved revision)
+  // Sync external content changes (e.g., when loading a saved revision).
+  // Use { emitUpdate: false } to prevent the editor's onUpdate from firing,
+  // which would otherwise create an infinite loop.
   $effect(() => {
     if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content);
+      editor.commands.setContent(content, { emitUpdate: false });
     }
   });
 

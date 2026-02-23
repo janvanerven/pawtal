@@ -102,6 +102,9 @@ pub struct App {
     pub sort_order: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    /// Filename of the icon media record (populated via LEFT JOIN).
+    #[sqlx(default)]
+    pub icon_filename: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]

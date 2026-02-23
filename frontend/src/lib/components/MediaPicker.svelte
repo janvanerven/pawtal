@@ -107,7 +107,7 @@
                 title={item.original_filename}
               >
                 {#if item.mime_type.startsWith('image/')}
-                  <img src="/uploads/{item.filename}" alt={item.alt_text || item.original_filename} />
+                  <img src="/uploads/{item.id}/{item.filename}" alt={item.alt_text || item.original_filename} />
                 {:else}
                   <div class="file-icon">📎</div>
                 {/if}

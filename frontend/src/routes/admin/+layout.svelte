@@ -23,7 +23,8 @@
   }
 
   async function handleLogout() {
-    window.location.href = '/api/auth/logout';
+    await fetch('/api/auth/logout', { method: 'POST' });
+    window.location.href = '/';
   }
 </script>
 

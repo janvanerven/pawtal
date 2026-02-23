@@ -130,7 +130,7 @@ export const api = {
 
     // Trash
     listTrash: () => fetchApi<{ pages: Page[]; articles: Article[] }>('/admin/trash'),
-    emptyTrash: () => fetchApi<{ deleted_pages: number; deleted_articles: number }>('/admin/trash/empty', { method: 'POST' }),
+    emptyTrash: () => fetchApi<{ ok: boolean; pages_deleted: number; articles_deleted: number }>('/admin/trash/empty', { method: 'POST' }),
 
     // Audit
     listAuditLog: (page = 1) => fetchApi<PaginatedResponse<AuditLogEntry>>(`/admin/audit-log?page=${page}`),

@@ -50,7 +50,7 @@
     if (!confirm('Permanently delete all items older than 30 days? This cannot be undone.')) return;
     try {
       const result = await api.admin.emptyTrash();
-      successMsg = `Deleted ${result.deleted_pages} pages and ${result.deleted_articles} articles.`;
+      successMsg = `Deleted ${result.pages_deleted} pages and ${result.articles_deleted} articles.`;
       loadTrash();
     } catch (e) {
       error = e instanceof Error ? e.message : 'Empty trash failed';

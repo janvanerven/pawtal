@@ -79,6 +79,7 @@ export interface App {
   name: string;
   description: string;
   icon_id: string | null;
+  icon_filename: string | null;
   url: string | null;
   page_id: string | null;
   sort_order: number;

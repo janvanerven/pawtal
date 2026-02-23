@@ -304,6 +304,7 @@ async fn proxy_to_frontend(
 ) -> impl IntoResponse {
     let method = req.method().clone();
     let uri = req.uri().clone();
+    let req_headers = req.headers().clone();
 
     // Reconstruct the target URL: origin + path + optional query string.
     let path_and_query = uri
@@ -322,13 +323,24 @@ async fn proxy_to_frontend(
         }
     };
 
-    let proxy_req = client
+    let mut proxy_req = client
         .request(
             reqwest::Method::from_bytes(method.as_str().as_bytes())
                 .unwrap_or(reqwest::Method::GET),
             &target_url,
         )
         .body(body_bytes);
+
+    // Forward selected headers from the original request so SvelteKit can
+    // access cookies (for session-aware SSR) and content negotiation headers.
+    let headers_to_forward = ["cookie", "accept", "accept-language", "content-type"];
+    for (name, value) in req_headers.iter() {
+        if headers_to_forward.contains(&name.as_str()) {
+            if let Ok(v) = value.to_str() {
+                proxy_req = proxy_req.header(name.as_str(), v);
+            }
+        }
+    }
 
     match proxy_req.send().await {
         Ok(upstream) => {

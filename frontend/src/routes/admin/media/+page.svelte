@@ -167,7 +167,7 @@
             >
               {#if item.mime_type.startsWith('image/')}
                 <img
-                  src="/uploads/{item.filename}"
+                  src="/uploads/{item.id}/{item.filename}"
                   alt={item.alt_text || item.original_filename}
                   loading="lazy"
                 />
@@ -187,7 +187,7 @@
         <div class="detail-preview">
           {#if selectedItem.mime_type.startsWith('image/')}
             <img
-              src="/uploads/{selectedItem.filename}"
+              src="/uploads/{selectedItem.id}/{selectedItem.filename}"
               alt={selectedItem.alt_text || selectedItem.original_filename}
             />
           {:else}
@@ -212,7 +212,7 @@
               id="media-url"
               type="text"
               readonly
-              value="/uploads/{selectedItem.filename}"
+              value="/uploads/{selectedItem.id}/{selectedItem.filename}"
               onclick={(e) => (e.target as HTMLInputElement).select()}
             />
           </div>

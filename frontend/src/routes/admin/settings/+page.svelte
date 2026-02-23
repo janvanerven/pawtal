@@ -9,7 +9,7 @@
   let frontPageType = $state<'page' | 'articles' | 'app_catalogue'>(
     (data.settings['front_page_type'] as 'page' | 'articles' | 'app_catalogue') ?? 'articles'
   );
-  let frontPageId = $state(data.settings['front_page_id'] ?? '');
+  let frontPageSlug = $state(data.settings['front_page_slug'] ?? '');
   let appsPerPage = $state(data.settings['apps_per_page'] ?? '20');
   let appCatalogueIntro = $state(data.settings['app_catalogue_intro'] ?? '');
   let darkModeDefault = $state(data.settings['dark_mode_default'] === 'true');
@@ -26,7 +26,7 @@
       await api.admin.updateSettings({
         site_title: siteTitle,
         front_page_type: frontPageType,
-        front_page_id: frontPageType === 'page' ? frontPageId : '',
+        front_page_slug: frontPageType === 'page' ? frontPageSlug : '',
         apps_per_page: appsPerPage,
         app_catalogue_intro: appCatalogueIntro,
         dark_mode_default: String(darkModeDefault),
@@ -81,11 +81,11 @@
       {#if frontPageType === 'page'}
         <div class="field">
           <label for="front-page">Front Page</label>
-          <select id="front-page" bind:value={frontPageId}>
+          <select id="front-page" bind:value={frontPageSlug}>
             <option value="">-- Select a page --</option>
             {#each data.pages as p (p.id)}
               {#if p.status === 'published'}
-                <option value={p.id}>{p.title}</option>
+                <option value={p.slug}>{p.title}</option>
               {/if}
             {/each}
           </select>

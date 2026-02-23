@@ -129,7 +129,7 @@
   function handleMediaSelect(event: CustomEvent<import('$lib/api/types').Media>) {
     const media = event.detail;
     window.dispatchEvent(new CustomEvent('rte:insert-image', {
-      detail: { src: `/uploads/${media.filename}`, alt: media.alt_text || media.original_filename }
+      detail: { src: `/uploads/${media.id}/${media.filename}`, alt: media.alt_text || media.original_filename }
     }));
   }
 </script>

@@ -15,7 +15,8 @@ use crate::services::audit;
 // ─── Column list shared by all SELECT queries ─────────────────────────────────
 
 const APP_COLS: &str =
-    "id, name, description, icon_id, url, page_id, sort_order, created_at, updated_at";
+    "a.id, a.name, a.description, a.icon_id, a.url, a.page_id, a.sort_order, \
+     a.created_at, a.updated_at, m.filename AS icon_filename";
 
 // ─── Public service functions ─────────────────────────────────────────────────
 
@@ -31,7 +32,8 @@ pub async fn list_apps(
     let offset = params.offset() as i64;
 
     let rows = sqlx::query_as::<_, App>(&format!(
-        "SELECT {APP_COLS} FROM apps ORDER BY sort_order ASC LIMIT ? OFFSET ?"
+        "SELECT {APP_COLS} FROM apps a LEFT JOIN media m ON a.icon_id = m.id \
+         ORDER BY a.sort_order ASC LIMIT ? OFFSET ?"
     ))
     .bind(per_page)
     .bind(offset)
@@ -53,7 +55,7 @@ pub async fn list_apps(
 /// Fetches a single app by primary key. Returns `NotFound` if absent.
 pub async fn get_app(pool: &SqlitePool, id: &str) -> AppResult<App> {
     sqlx::query_as::<_, App>(&format!(
-        "SELECT {APP_COLS} FROM apps WHERE id = ?"
+        "SELECT {APP_COLS} FROM apps a LEFT JOIN media m ON a.icon_id = m.id WHERE a.id = ?"
     ))
     .bind(id)
     .fetch_optional(pool)

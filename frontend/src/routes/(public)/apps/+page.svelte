@@ -29,7 +29,7 @@
           <div class="app-icon-wrap">
             {#if app.icon_id}
               <img
-                src="/uploads/{app.icon_id}"
+                src="/uploads/{app.icon_id}/{app.icon_filename}"
                 alt={app.name}
                 class="app-icon"
                 loading="lazy"

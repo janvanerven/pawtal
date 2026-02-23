@@ -57,7 +57,7 @@
     formName = app.name;
     formDescription = app.description;
     formIconId = app.icon_id;
-    formIconUrl = app.icon_id ? `/uploads/${app.icon_id}` : '';
+    formIconUrl = app.icon_id && app.icon_filename ? `/uploads/${app.icon_id}/${app.icon_filename}` : '';
     formLinkType = app.page_id ? 'page' : 'url';
     formUrl = app.url ?? '';
     formPageId = app.page_id;
@@ -121,7 +121,7 @@
   function handleIconSelect(event: CustomEvent<Media>) {
     const media = event.detail;
     formIconId = media.id;
-    formIconUrl = `/uploads/${media.filename}`;
+    formIconUrl = `/uploads/${media.id}/${media.filename}`;
   }
 </script>
 
@@ -151,7 +151,7 @@
         <div class="app-item card">
           <div class="app-icon">
             {#if app.icon_id}
-              <img src="/uploads/{app.icon_id}" alt="{app.name} icon" />
+              <img src="/uploads/{app.icon_id}/{app.icon_filename}" alt="{app.name} icon" />
             {:else}
               <div class="app-icon-placeholder">⚡</div>
             {/if}

@@ -100,7 +100,7 @@ pub async fn upload_media(
 
     // Derive a safe filename from the original. Reject empty names up-front.
     let safe_name = sanitize_filename(original_filename);
-    if safe_name.is_empty() {
+    if safe_name.is_empty() || safe_name.chars().all(|c| c == '.') {
         return Err(AppError::BadRequest("Invalid filename".into()));
     }
 

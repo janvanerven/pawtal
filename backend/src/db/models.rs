@@ -16,7 +16,7 @@ pub struct User {
     pub display_name: String,
     pub role: String,
     pub created_at: DateTime<Utc>,
-    pub last_login: Option<DateTime<Utc>>,
+    pub last_login: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]

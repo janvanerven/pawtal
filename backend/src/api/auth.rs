@@ -13,7 +13,7 @@
 use axum::{
     extract::{Extension, Path, Query, State},
     http::header,
-    response::{IntoResponse, Redirect, Response},
+    response::{IntoResponse, Response},
     Json,
 };
 use serde::Deserialize;
@@ -29,23 +29,15 @@ use crate::AppState;
 #[derive(Debug, Deserialize)]
 pub struct CallbackParams {
     pub code: String,
-    #[allow(dead_code)]
     pub state: String,
 }
 
 /// `GET /api/auth/login`
 ///
 /// Discovers the OIDC provider endpoints, builds the authorization URL, and
-/// redirects the browser to the IdP's login page.
-///
-/// The `state` parameter is a random UUID. In a full production implementation
-/// you would store this in a short-lived signed cookie and verify it in the
-/// callback to prevent CSRF; for an internal CMS behind a trusted network this
-/// provides a reasonable baseline.
+/// redirects the browser to the IdP's login page. The CSRF `state` parameter
+/// is stored in a short-lived HttpOnly cookie and verified in the callback.
 pub async fn login(State(state): State<AppState>) -> AppResult<impl IntoResponse> {
-    // Build a reqwest client for this request. In a high-traffic service you'd
-    // store a shared Client in AppState; for an auth flow that's hit rarely,
-    // a per-request client is fine and avoids state complexity.
     let client = reqwest::Client::new();
 
     let discovery = discover_oidc(&client, &state.config.oauth2_issuer_url).await?;
@@ -53,7 +45,21 @@ pub async fn login(State(state): State<AppState>) -> AppResult<impl IntoResponse
     let csrf_state = Uuid::new_v4().to_string();
     let auth_url = build_auth_url(&discovery, &state.config, &csrf_state);
 
-    Ok(Redirect::to(&auth_url))
+    // Store the CSRF state in a short-lived HttpOnly cookie so we can verify
+    // it when the IdP redirects back to our callback endpoint.
+    let state_cookie = format!(
+        "pawtal_oauth_state={}; HttpOnly; SameSite=Lax; Path=/api/auth/callback; Max-Age=600",
+        csrf_state
+    );
+
+    let response = Response::builder()
+        .status(axum::http::StatusCode::FOUND)
+        .header(header::LOCATION, auth_url)
+        .header(header::SET_COOKIE, state_cookie)
+        .body(axum::body::Body::empty())
+        .map_err(|e| AppError::Internal(format!("Failed to build redirect response: {e}")))?;
+
+    Ok(response)
 }
 
 /// `GET /api/auth/callback`
@@ -64,7 +70,25 @@ pub async fn login(State(state): State<AppState>) -> AppResult<impl IntoResponse
 pub async fn callback(
     State(state): State<AppState>,
     Query(params): Query<CallbackParams>,
+    headers: axum::http::HeaderMap,
 ) -> AppResult<impl IntoResponse> {
+    // Verify the CSRF state parameter matches the cookie we set during login.
+    let stored_state = headers
+        .get("cookie")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|cookies| {
+            cookies.split(';').find_map(|pair| {
+                let pair = pair.trim();
+                pair.split_once('=')
+                    .filter(|(name, _)| name.trim() == "pawtal_oauth_state")
+                    .map(|(_, value)| value.trim().to_string())
+            })
+        })
+        .ok_or_else(|| AppError::BadRequest("Missing OAuth state cookie".into()))?;
+
+    if params.state != stored_state {
+        return Err(AppError::BadRequest("OAuth state mismatch".into()));
+    }
     let client = reqwest::Client::new();
 
     let discovery = discover_oidc(&client, &state.config.oauth2_issuer_url).await?;
@@ -96,11 +120,11 @@ pub async fn callback(
     let user_id = sqlx::query_scalar::<_, String>(
         r#"
         INSERT INTO users (id, external_id, email, display_name, role, last_login)
-        VALUES (?, ?, ?, ?, ?, datetime('now'))
+        VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
         ON CONFLICT(external_id) DO UPDATE SET
             email        = excluded.email,
             display_name = excluded.display_name,
-            last_login   = datetime('now')
+            last_login   = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
         RETURNING id
         "#,
     )
@@ -122,12 +146,17 @@ pub async fn callback(
         session_token
     );
 
-    // Redirect to the admin UI. The Set-Cookie header is carried alongside the
-    // redirect response — browsers apply the cookie before following the redirect.
+    // Clear the OAuth state cookie now that it has been verified.
+    let clear_state_cookie =
+        "pawtal_oauth_state=; HttpOnly; SameSite=Lax; Path=/api/auth/callback; Max-Age=0";
+
+    // Redirect to the admin UI. The Set-Cookie headers are carried alongside the
+    // redirect response — browsers apply cookies before following the redirect.
     let response = Response::builder()
         .status(axum::http::StatusCode::FOUND)
         .header(header::LOCATION, "/admin")
         .header(header::SET_COOKIE, cookie)
+        .header(header::SET_COOKIE, clear_state_cookie)
         .body(axum::body::Body::empty())
         .map_err(|e| AppError::Internal(format!("Failed to build redirect response: {e}")))?;
 

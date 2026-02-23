@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
 # ── Entrypoint for the Pawtal single-container deployment ─────────────────────
@@ -19,7 +19,7 @@ cd /app/frontend && PORT=3000 node build/index.js &
 SVELTEKIT_PID=$!
 
 echo "Starting Axum API server on port 8080..."
-cd /app && exec ./pawtal &
+cd /app && ./pawtal &
 AXUM_PID=$!
 
 # Forward SIGTERM/SIGINT to both children so Docker stop is clean.
@@ -27,7 +27,7 @@ trap 'kill $SVELTEKIT_PID $AXUM_PID 2>/dev/null; wait' TERM INT
 
 # Wait for either child to exit. If one dies, bring down the other so Docker
 # can detect the failure and restart the container.
-wait -n 2>/dev/null || wait
+wait -n
 echo "A child process exited — shutting down container."
 kill $SVELTEKIT_PID $AXUM_PID 2>/dev/null
 wait

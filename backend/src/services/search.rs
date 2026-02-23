@@ -41,8 +41,12 @@ pub async fn search(
 
     let mut results: Vec<SearchResult> = Vec::new();
 
-    // Append `*` for prefix matching so users get results while still typing.
-    let fts_query = format!("{}*", query.trim());
+    // Wrap the query in FTS5 double-quote literals to prevent user input from
+    // being interpreted as FTS5 syntax (AND, OR, NOT, column filters, etc.).
+    // Internal double-quotes are escaped by doubling them per FTS5 rules.
+    // The trailing `*` outside the quotes enables prefix matching.
+    let escaped = query.trim().replace('"', "\"\"");
+    let fts_query = format!("\"{}\"*", escaped);
 
     // ── Pages ─────────────────────────────────────────────────────────────────
 

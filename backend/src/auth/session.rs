@@ -33,8 +33,8 @@ pub async fn create_session(pool: &SqlitePool, user_id: &str) -> AppResult<Strin
             ?,
             ?,
             ?,
-            datetime('now', ? || ' seconds'),
-            datetime('now')
+            strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ? || ' seconds'),
+            strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
         )
         "#,
     )
@@ -61,7 +61,7 @@ pub async fn validate_session(pool: &SqlitePool, token: &str) -> AppResult<User>
         FROM sessions s
         JOIN users u ON u.id = s.user_id
         WHERE s.token = ?
-          AND s.expires_at > datetime('now')
+          AND s.expires_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
         "#,
     )
     .bind(token)

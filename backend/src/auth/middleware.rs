@@ -65,25 +65,3 @@ pub async fn require_auth(
     Ok(next.run(request).await)
 }
 
-/// Middleware that requires a valid session *and* the `admin` role.
-///
-/// On success the authenticated `User` is inserted into request extensions.
-/// On failure returns 401 if unauthenticated or 403 if authenticated but
-/// lacking the admin role.
-pub async fn require_admin(
-    State(state): State<AppState>,
-    mut request: Request,
-    next: Next,
-) -> Result<Response, AppError> {
-    let token = extract_session_cookie(&request).ok_or(AppError::Unauthorized)?;
-
-    let user = validate_session(&state.db, &token).await?;
-
-    if user.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
-
-    request.extensions_mut().insert(user);
-
-    Ok(next.run(request).await)
-}

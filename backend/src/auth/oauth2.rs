@@ -28,8 +28,11 @@ pub struct OidcDiscovery {
 #[derive(Debug, Deserialize)]
 pub struct TokenResponse {
     pub access_token: String,
+    #[allow(dead_code)]
     pub token_type: String,
+    #[allow(dead_code)]
     pub expires_in: Option<u64>,
+    #[allow(dead_code)]
     pub id_token: Option<String>,
 }
 

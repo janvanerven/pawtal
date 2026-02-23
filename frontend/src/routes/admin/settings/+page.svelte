@@ -4,18 +4,15 @@
 
   let { data }: { data: PageData } = $props();
 
-  const settings = data.settings;
-  const pages = data.pages;
-
   // Initialize form from loaded settings
-  let siteTitle = $state(settings['site_title'] ?? '');
+  let siteTitle = $state(data.settings['site_title'] ?? '');
   let frontPageType = $state<'page' | 'articles' | 'app_catalogue'>(
-    (settings['front_page_type'] as 'page' | 'articles' | 'app_catalogue') ?? 'articles'
+    (data.settings['front_page_type'] as 'page' | 'articles' | 'app_catalogue') ?? 'articles'
   );
-  let frontPageId = $state(settings['front_page_id'] ?? '');
-  let appsPerPage = $state(settings['apps_per_page'] ?? '20');
-  let appCatalogueIntro = $state(settings['app_catalogue_intro'] ?? '');
-  let darkModeDefault = $state(settings['dark_mode_default'] === 'true');
+  let frontPageId = $state(data.settings['front_page_id'] ?? '');
+  let appsPerPage = $state(data.settings['apps_per_page'] ?? '20');
+  let appCatalogueIntro = $state(data.settings['app_catalogue_intro'] ?? '');
+  let darkModeDefault = $state(data.settings['dark_mode_default'] === 'true');
 
   let saving = $state(false);
   let error = $state('');
@@ -86,7 +83,7 @@
           <label for="front-page">Front Page</label>
           <select id="front-page" bind:value={frontPageId}>
             <option value="">-- Select a page --</option>
-            {#each pages as p (p.id)}
+            {#each data.pages as p (p.id)}
               {#if p.status === 'published'}
                 <option value={p.id}>{p.title}</option>
               {/if}

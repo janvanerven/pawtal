@@ -29,6 +29,7 @@ use crate::AppState;
 #[derive(Debug, Deserialize)]
 pub struct CallbackParams {
     pub code: String,
+    #[allow(dead_code)]
     pub state: String,
 }
 

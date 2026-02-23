@@ -85,14 +85,3 @@ pub async fn delete_session(pool: &SqlitePool, token: &str) -> AppResult<()> {
     Ok(())
 }
 
-/// Removes all sessions whose `expires_at` is in the past.
-///
-/// Returns the number of rows deleted so callers can log meaningful metrics.
-/// Safe to run on a timer — SQLite's WAL mode means this won't block readers.
-pub async fn cleanup_expired_sessions(pool: &SqlitePool) -> AppResult<u64> {
-    let result = sqlx::query("DELETE FROM sessions WHERE expires_at <= datetime('now')")
-        .execute(pool)
-        .await?;
-
-    Ok(result.rows_affected())
-}

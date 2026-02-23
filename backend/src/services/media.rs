@@ -222,21 +222,6 @@ pub async fn delete_media(
     Ok(())
 }
 
-/// Updates the `alt_text` for an existing media record and returns the updated row.
-pub async fn update_alt_text(pool: &SqlitePool, id: &str, alt_text: &str) -> AppResult<Media> {
-    // Confirm the record exists before issuing an UPDATE that would silently
-    // match zero rows if it does not.
-    let _ = get_media(pool, id).await?;
-
-    sqlx::query("UPDATE media SET alt_text = ? WHERE id = ?")
-        .bind(alt_text)
-        .bind(id)
-        .execute(pool)
-        .await?;
-
-    get_media(pool, id).await
-}
-
 // ─── Private helpers ──────────────────────────────────────────────────────────
 
 /// Fetches a single media record by ID. Returns `NotFound` if absent.

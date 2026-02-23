@@ -13,18 +13,15 @@
 
   let { article: existingArticle, categories }: Props = $props();
 
-  // Capture initial values once — editors intentionally don't reactively follow prop changes
-  const _initArticle = existingArticle;
-
-  // Form state
-  let title = $state(_initArticle?.title ?? '');
-  let slug = $state(_initArticle?.slug ?? '');
-  let shortText = $state(_initArticle?.short_text ?? '');
-  let content = $state(_initArticle?.content ?? '');
+  // Form state — initialized once from the prop; editors don't reactively follow prop changes
+  let title = $state(existingArticle?.title ?? '');
+  let slug = $state(existingArticle?.slug ?? '');
+  let shortText = $state(existingArticle?.short_text ?? '');
+  let content = $state(existingArticle?.content ?? '');
   let status = $state<'draft' | 'published' | 'scheduled'>(
-    (_initArticle?.status === 'trashed' ? 'draft' : _initArticle?.status) ?? 'draft'
+    (existingArticle?.status === 'trashed' ? 'draft' : existingArticle?.status) ?? 'draft'
   );
-  let publishAt = $state(_initArticle?.publish_at ?? '');
+  let publishAt = $state(existingArticle?.publish_at ?? '');
   let selectedCategoryIds = $state<string[]>([]);
 
   // UI state
@@ -36,7 +33,7 @@
   let revisions = $state<import('$lib/api/types').ArticleRevision[]>([]);
   let loadingRevisions = $state(false);
 
-  let slugManuallyEdited = $state(!!_initArticle?.slug);
+  let slugManuallyEdited = $state(!!existingArticle?.slug);
 
   function handleTitleInput() {
     if (!slugManuallyEdited) {

@@ -13,17 +13,14 @@
 
   let { page: existingPage, categories }: Props = $props();
 
-  // Capture initial values once — editors intentionally don't reactively follow prop changes
-  const _initPage = existingPage;
-
-  // Form state
-  let title = $state(_initPage?.title ?? '');
-  let slug = $state(_initPage?.slug ?? '');
-  let content = $state(_initPage?.content ?? '');
+  // Form state — initialized once from the prop; editors don't reactively follow prop changes
+  let title = $state(existingPage?.title ?? '');
+  let slug = $state(existingPage?.slug ?? '');
+  let content = $state(existingPage?.content ?? '');
   let status = $state<'draft' | 'published' | 'scheduled'>(
-    (_initPage?.status === 'trashed' ? 'draft' : _initPage?.status) ?? 'draft'
+    (existingPage?.status === 'trashed' ? 'draft' : existingPage?.status) ?? 'draft'
   );
-  let publishAt = $state(_initPage?.publish_at ?? '');
+  let publishAt = $state(existingPage?.publish_at ?? '');
   let selectedCategoryIds = $state<string[]>([]);
 
   // UI state
@@ -36,7 +33,7 @@
   let loadingRevisions = $state(false);
 
   // Auto-slug from title (only when creating new)
-  let slugManuallyEdited = $state(!!_initPage?.slug);
+  let slugManuallyEdited = $state(!!existingPage?.slug);
 
   function handleTitleInput() {
     if (!slugManuallyEdited) {

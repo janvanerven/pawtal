@@ -20,15 +20,6 @@ pub struct User {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
-pub struct Session {
-    pub id: String,
-    pub user_id: String,
-    pub token: String,
-    pub expires_at: DateTime<Utc>,
-    pub created_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Page {
     pub id: String,
     pub title: String,
@@ -128,13 +119,6 @@ pub struct MenuItem {
     pub link_target: String,
     pub parent_id: Option<String>,
     pub sort_order: i32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
-pub struct SiteSetting {
-    pub key: String,
-    pub value: String,
-    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]

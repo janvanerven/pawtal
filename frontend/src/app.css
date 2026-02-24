@@ -355,3 +355,29 @@ input:focus, textarea:focus, select:focus {
 .prose tr:nth-child(even) td {
   background: rgba(232, 222, 212, 0.15);
 }
+
+/* Shiki dual-theme code blocks */
+.prose .shiki,
+.prose .shiki span {
+  color: var(--shiki-light);
+  background-color: var(--shiki-light-bg);
+}
+
+[data-theme="dark"] .prose .shiki,
+[data-theme="dark"] .prose .shiki span {
+  color: var(--shiki-dark);
+  background-color: var(--shiki-dark-bg);
+}
+
+.prose pre.shiki {
+  background: var(--shiki-light-bg) !important;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  overflow-x: auto;
+  margin-bottom: 1em;
+}
+
+[data-theme="dark"] .prose pre.shiki {
+  background: var(--shiki-dark-bg) !important;
+}

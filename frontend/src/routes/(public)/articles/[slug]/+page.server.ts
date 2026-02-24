@@ -1,6 +1,7 @@
 import type { PageServerLoad } from './$types';
 import { error } from '@sveltejs/kit';
 import type { Article } from '$lib/api/types';
+import { highlightCodeBlocks } from '$lib/highlight';
 
 export const load: PageServerLoad = async ({ fetch, params }) => {
   const res = await fetch(`/api/articles/${params.slug}`);
@@ -42,6 +43,9 @@ export const load: PageServerLoad = async ({ fetch, params }) => {
       `$1 id="${heading.id}"$2`
     );
   }
+
+  // Apply syntax highlighting to code blocks
+  processedContent = await highlightCodeBlocks(processedContent);
 
   return { article: { ...article, content: processedContent }, related, toc };
 };

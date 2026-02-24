@@ -2,6 +2,7 @@
   import type { PageData } from './$types';
   import { formatDate } from '$lib/utils';
   import InView from '$lib/components/InView.svelte';
+  import Logo from '$lib/components/Logo.svelte';
 
   let { data }: { data: PageData } = $props();
 
@@ -10,15 +11,24 @@
     data.type === 'apps' ? (data.apps?.page ?? 1) : 1
   );
 
-  const totalPages = $derived(() => {
-    if (data.type === 'apps' && data.apps) {
-      return Math.ceil(data.apps.total / data.apps.per_page);
-    }
-    return 1;
-  });
+  const totalPages = $derived(
+    data.type === 'apps' && data.apps
+      ? Math.ceil(data.apps.total / data.apps.per_page)
+      : 1
+  );
 
   const siteTitle = $derived(data.settings?.site_title || 'Pawtal');
   const siteDescription = $derived(data.settings?.site_description || 'Projects, articles, and more.');
+
+  /** Only allow http/https URLs to prevent javascript: injection. */
+  function safeUrl(url: string | null | undefined): string | undefined {
+    if (!url) return undefined;
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'https:' || parsed.protocol === 'http:') return url;
+    } catch { /* invalid URL */ }
+    return undefined;
+  }
 </script>
 
 <svelte:head>
@@ -64,8 +74,8 @@
                 <p class="app-description">{app.description}</p>
               {/if}
             </div>
-            {#if app.url}
-              <a href={app.url} target="_blank" rel="noopener noreferrer" class="app-link btn btn-primary">
+            {#if safeUrl(app.url)}
+              <a href={safeUrl(app.url)} target="_blank" rel="noopener noreferrer" class="app-link btn btn-primary">
                 Visit
               </a>
             {:else if app.page_id}
@@ -76,13 +86,13 @@
       </div>
     {/if}
 
-    {#if totalPages() > 1}
+    {#if totalPages > 1}
       <div class="pagination">
         {#if currentPage > 1}
           <a href="?page={currentPage - 1}" class="btn btn-ghost">Previous</a>
         {/if}
-        <span class="page-info">Page {currentPage} of {totalPages()}</span>
-        {#if currentPage < totalPages()}
+        <span class="page-info">Page {currentPage} of {totalPages}</span>
+        {#if currentPage < totalPages}
           <a href="?page={currentPage + 1}" class="btn btn-ghost">Next</a>
         {/if}
       </div>
@@ -94,15 +104,26 @@
 
   <!-- Hero Section -->
   <section class="hero">
-    <div class="hero-bg"></div>
+    <div class="hero-pattern"></div>
+    <div class="hero-glow hero-glow-1"></div>
+    <div class="hero-glow hero-glow-2"></div>
     <div class="hero-content">
-      <h1 class="hero-title">{siteTitle}</h1>
+      <div class="hero-logo">
+        <Logo size={72} />
+      </div>
+      <h1 class="hero-title">
+        <span class="gradient-text">{siteTitle}</span>
+      </h1>
       <p class="hero-subtitle">{siteDescription}</p>
       <div class="hero-actions">
         <a href="/articles" class="btn-gradient">Read Articles</a>
         <a href="/apps" class="btn btn-ghost btn-outline">Browse Projects</a>
       </div>
     </div>
+    <!-- Floating decorative shapes -->
+    <div class="hero-shape hero-shape-1" aria-hidden="true"></div>
+    <div class="hero-shape hero-shape-2" aria-hidden="true"></div>
+    <div class="hero-shape hero-shape-3" aria-hidden="true"></div>
   </section>
 
   <!-- Featured Projects -->
@@ -110,17 +131,20 @@
     <InView>
       <section class="section">
         <div class="section-header">
-          <h2>Featured Projects</h2>
+          <div class="section-header-left">
+            <div class="section-accent"></div>
+            <h2>Featured Projects</h2>
+          </div>
           <a href="/apps" class="section-link">View all &rarr;</a>
         </div>
         <div class="projects-grid">
           {#each data.featuredApps.data as app, i (app.id)}
             <InView delay={i * 100}>
               <a
-                href={app.url || (app.page_id ? `/${app.page_id}` : '/apps')}
+                href={safeUrl(app.url) || (app.page_id ? `/${app.page_id}` : '/apps')}
                 class="project-card"
-                target={app.url ? '_blank' : undefined}
-                rel={app.url ? 'noopener noreferrer' : undefined}
+                target={safeUrl(app.url) ? '_blank' : undefined}
+                rel={safeUrl(app.url) ? 'noopener noreferrer' : undefined}
               >
                 {#if app.icon_id}
                   <img
@@ -144,44 +168,95 @@
     </InView>
   {/if}
 
+  <!-- Section divider -->
+  <div class="section-divider" aria-hidden="true">
+    <span></span><span></span><span></span>
+  </div>
+
   <!-- Latest Articles -->
   {#if data.articles && data.articles.data.length > 0}
     <InView>
       <section class="section">
         <div class="section-header">
-          <h2>Latest Articles</h2>
+          <div class="section-header-left">
+            <div class="section-accent"></div>
+            <h2>Latest Articles</h2>
+          </div>
           <a href="/articles" class="section-link">View all &rarr;</a>
         </div>
-        <div class="articles-grid">
-          {#each data.articles.data as article, i (article.id)}
-            <InView delay={i * 80}>
-              <a href="/articles/{article.slug}" class="article-card">
-                {#if article.cover_image_id}
-                  <div class="article-cover">
+        <div class="articles-layout">
+          <!-- First article as hero card -->
+          {#if data.articles.data.length > 0}
+            {@const hero = data.articles.data[0]}
+            <InView>
+              <a href="/articles/{hero.slug}" class="article-hero-card">
+                {#if hero.cover_image_id}
+                  <div class="article-hero-cover">
                     <img
-                      src="/uploads/{article.cover_image_id}/medium.webp"
-                      alt={article.title}
+                      src="/uploads/{hero.cover_image_id}/medium.webp"
+                      alt={hero.title}
                       loading="lazy"
                     />
                   </div>
+                {:else}
+                  <div class="article-hero-cover article-hero-cover-empty">
+                    <Logo size={48} />
+                  </div>
                 {/if}
-                <div class="article-card-body">
+                <div class="article-hero-body">
+                  <span class="article-badge">Latest</span>
                   <div class="article-meta">
-                    <time datetime={article.publish_at ?? article.created_at}>
-                      {formatDate(article.publish_at ?? article.created_at)}
+                    <time datetime={hero.publish_at ?? hero.created_at}>
+                      {formatDate(hero.publish_at ?? hero.created_at)}
                     </time>
-                    {#if article.reading_time_minutes > 0}
-                      <span class="reading-time">{article.reading_time_minutes} min read</span>
+                    {#if hero.reading_time_minutes > 0}
+                      <span class="reading-time">{hero.reading_time_minutes} min read</span>
                     {/if}
                   </div>
-                  <h3 class="article-title">{article.title}</h3>
-                  {#if article.short_text}
-                    <p class="article-excerpt">{article.short_text}</p>
+                  <h3 class="article-hero-title">{hero.title}</h3>
+                  {#if hero.short_text}
+                    <p class="article-hero-excerpt">{hero.short_text}</p>
                   {/if}
+                  <span class="article-read-more">Read article &rarr;</span>
                 </div>
               </a>
             </InView>
-          {/each}
+          {/if}
+
+          <!-- Remaining articles in grid -->
+          {#if data.articles.data.length > 1}
+            <div class="articles-grid">
+              {#each data.articles.data.slice(1) as article, i (article.id)}
+                <InView delay={i * 80}>
+                  <a href="/articles/{article.slug}" class="article-card">
+                    {#if article.cover_image_id}
+                      <div class="article-cover">
+                        <img
+                          src="/uploads/{article.cover_image_id}/medium.webp"
+                          alt={article.title}
+                          loading="lazy"
+                        />
+                      </div>
+                    {/if}
+                    <div class="article-card-body">
+                      <div class="article-meta">
+                        <time datetime={article.publish_at ?? article.created_at}>
+                          {formatDate(article.publish_at ?? article.created_at)}
+                        </time>
+                        {#if article.reading_time_minutes > 0}
+                          <span class="reading-time">{article.reading_time_minutes} min read</span>
+                        {/if}
+                      </div>
+                      <h3 class="article-title">{article.title}</h3>
+                      {#if article.short_text}
+                        <p class="article-excerpt">{article.short_text}</p>
+                      {/if}
+                    </div>
+                  </a>
+                </InView>
+              {/each}
+            </div>
+          {/if}
         </div>
       </section>
     </InView>
@@ -192,29 +267,51 @@
   /* ---- Hero ---- */
   .hero {
     text-align: center;
-    padding: var(--space-3xl) var(--space-lg);
+    padding: var(--space-3xl) var(--space-lg) calc(var(--space-3xl) + 2rem);
     position: relative;
     overflow: hidden;
     margin: calc(-1 * var(--space-xl)) calc(-1 * var(--space-lg)) var(--space-2xl);
   }
 
-  .hero-bg {
+  /* Dot pattern background */
+  .hero-pattern {
     position: absolute;
-    inset: -50%;
-    background: conic-gradient(
-      from 0deg at 50% 50%,
-      rgba(232, 146, 74, 0.08) 0deg,
-      rgba(232, 93, 93, 0.06) 120deg,
-      rgba(123, 166, 140, 0.05) 240deg,
-      rgba(232, 146, 74, 0.08) 360deg
-    );
-    animation: rotate-gradient 25s linear infinite;
+    inset: 0;
+    background-image: radial-gradient(circle, var(--color-primary) 0.75px, transparent 0.75px);
+    background-size: 28px 28px;
+    opacity: 0.06;
     z-index: 0;
   }
 
-  @keyframes rotate-gradient {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+  /* Gradient glow orbs */
+  .hero-glow {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    z-index: 0;
+  }
+
+  .hero-glow-1 {
+    width: 400px;
+    height: 400px;
+    background: rgba(232, 146, 74, 0.15);
+    top: -100px;
+    right: -80px;
+    animation: float-glow 12s ease-in-out infinite;
+  }
+
+  .hero-glow-2 {
+    width: 350px;
+    height: 350px;
+    background: rgba(232, 93, 93, 0.12);
+    bottom: -80px;
+    left: -60px;
+    animation: float-glow 15s ease-in-out infinite reverse;
+  }
+
+  @keyframes float-glow {
+    0%, 100% { transform: translate(0, 0); }
+    50% { transform: translate(30px, -20px); }
   }
 
   .hero-content {
@@ -222,20 +319,35 @@
     z-index: 1;
   }
 
-  .hero-title {
-    font-size: clamp(2.5rem, 6vw, 4.5rem);
-    font-weight: 300;
-    letter-spacing: -0.03em;
-    line-height: 1.1;
+  .hero-logo {
+    display: inline-flex;
     margin-bottom: var(--space-lg);
+    animation: fade-in-up 0.6s ease-out both;
+  }
+
+  .hero-title {
+    font-size: clamp(2.5rem, 7vw, 5rem);
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    line-height: 1.05;
+    margin-bottom: var(--space-lg);
+    animation: fade-in-up 0.6s ease-out 0.1s both;
+  }
+
+  .gradient-text {
+    background: var(--gradient-accent);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 
   .hero-subtitle {
-    font-size: clamp(1rem, 2vw, 1.25rem);
+    font-size: clamp(1.05rem, 2vw, 1.3rem);
     color: var(--color-text-muted);
-    max-width: 600px;
+    max-width: 560px;
     margin: 0 auto var(--space-xl);
-    line-height: 1.6;
+    line-height: 1.7;
+    animation: fade-in-up 0.6s ease-out 0.2s both;
   }
 
   .hero-actions {
@@ -243,6 +355,60 @@
     gap: var(--space-md);
     justify-content: center;
     flex-wrap: wrap;
+    animation: fade-in-up 0.6s ease-out 0.3s both;
+  }
+
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Floating decorative shapes */
+  .hero-shape {
+    position: absolute;
+    border-radius: var(--radius-md);
+    border: 2px solid var(--color-primary);
+    opacity: 0.08;
+    z-index: 0;
+  }
+
+  .hero-shape-1 {
+    width: 60px;
+    height: 60px;
+    top: 20%;
+    left: 8%;
+    transform: rotate(15deg);
+    animation: float-shape 8s ease-in-out infinite;
+  }
+
+  .hero-shape-2 {
+    width: 40px;
+    height: 40px;
+    bottom: 25%;
+    right: 12%;
+    border-radius: 50%;
+    border-color: var(--color-accent);
+    animation: float-shape 10s ease-in-out infinite reverse;
+  }
+
+  .hero-shape-3 {
+    width: 28px;
+    height: 28px;
+    top: 35%;
+    right: 20%;
+    transform: rotate(45deg);
+    animation: float-shape 7s ease-in-out 1s infinite;
+  }
+
+  @keyframes float-shape {
+    0%, 100% { transform: translateY(0) rotate(var(--r, 15deg)); }
+    50% { transform: translateY(-12px) rotate(calc(var(--r, 15deg) + 5deg)); }
   }
 
   .btn-gradient {
@@ -260,7 +426,7 @@
 
   .btn-gradient:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(232, 146, 74, 0.3);
+    box-shadow: 0 8px 25px rgba(232, 146, 74, 0.35);
     color: white;
   }
 
@@ -283,6 +449,19 @@
     margin-bottom: var(--space-xl);
   }
 
+  .section-header-left {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .section-accent {
+    width: 48px;
+    height: 3px;
+    background: var(--gradient-accent);
+    border-radius: 2px;
+  }
+
   .section-header h2 {
     font-size: clamp(1.5rem, 3vw, 2rem);
   }
@@ -297,6 +476,29 @@
 
   .section-link:hover {
     color: var(--color-primary-hover);
+  }
+
+  /* Section divider */
+  .section-divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: var(--space-3xl);
+  }
+
+  .section-divider span {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    opacity: 0.2;
+  }
+
+  .section-divider span:nth-child(2) {
+    opacity: 0.35;
+    width: 6px;
+    height: 6px;
   }
 
   /* ---- Featured Projects ---- */
@@ -320,7 +522,7 @@
     align-items: center;
     text-align: center;
     gap: var(--space-md);
-    transition: transform var(--transition-spring), box-shadow var(--transition-normal);
+    transition: transform var(--transition-spring), box-shadow var(--transition-normal), border-color var(--transition-fast);
   }
 
   :global([data-theme="dark"]) .project-card {
@@ -331,6 +533,7 @@
   .project-card:hover {
     transform: translateY(-4px) scale(1.01);
     box-shadow: var(--shadow-lg);
+    border-color: var(--color-primary-light);
     color: var(--color-text);
   }
 
@@ -365,7 +568,106 @@
     overflow: hidden;
   }
 
-  /* ---- Latest Articles ---- */
+  /* ---- Articles layout ---- */
+  .articles-layout {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xl);
+  }
+
+  /* Hero article card: horizontal layout */
+  .article-hero-card {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-md);
+    text-decoration: none;
+    color: var(--color-text);
+    transition: transform var(--transition-spring), box-shadow var(--transition-normal);
+    border: 1px solid var(--color-border);
+  }
+
+  .article-hero-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+    color: var(--color-text);
+  }
+
+  .article-hero-cover {
+    aspect-ratio: 4/3;
+    overflow: hidden;
+  }
+
+  .article-hero-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform var(--transition-normal);
+  }
+
+  .article-hero-card:hover .article-hero-cover img {
+    transform: scale(1.03);
+  }
+
+  .article-hero-cover-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(232,146,74,0.08), rgba(232,93,93,0.08));
+  }
+
+  .article-hero-body {
+    padding: var(--space-xl) var(--space-xl);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--space-sm);
+  }
+
+  .article-badge {
+    display: inline-flex;
+    align-self: flex-start;
+    padding: 2px 10px;
+    border-radius: var(--radius-full);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: var(--gradient-accent);
+    color: white;
+  }
+
+  .article-hero-title {
+    font-size: clamp(1.25rem, 2.5vw, 1.75rem);
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  .article-hero-excerpt {
+    color: var(--color-text-muted);
+    font-size: 0.95rem;
+    line-height: 1.65;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .article-read-more {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-primary);
+    margin-top: var(--space-sm);
+  }
+
+  .article-hero-card:hover .article-read-more {
+    color: var(--color-primary-hover);
+  }
+
+  /* Regular articles grid */
   .articles-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -382,11 +684,13 @@
     text-decoration: none;
     color: var(--color-text);
     transition: transform var(--transition-spring), box-shadow var(--transition-normal);
+    border: 1px solid transparent;
   }
 
   .article-card:hover {
     transform: translateY(-4px);
     box-shadow: var(--shadow-lg);
+    border-color: var(--color-primary-light);
     color: var(--color-text);
   }
 
@@ -532,6 +836,15 @@
     }
     .hero {
       padding: var(--space-2xl) var(--space-md);
+    }
+    .article-hero-card {
+      grid-template-columns: 1fr;
+    }
+    .article-hero-cover {
+      aspect-ratio: 16/9;
+    }
+    .hero-shape {
+      display: none;
     }
   }
 

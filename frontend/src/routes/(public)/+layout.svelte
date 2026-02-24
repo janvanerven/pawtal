@@ -6,6 +6,7 @@
   import DarkModeToggle from '$lib/components/DarkModeToggle.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import SearchModal from '$lib/components/SearchModal.svelte';
+  import Logo from '$lib/components/Logo.svelte';
 
   let { data, children }: { data: LayoutData; children: import('svelte').Snippet } = $props();
 
@@ -53,6 +54,7 @@
     <div class="header-inner">
       <!-- Logo / site title -->
       <a href="/" class="site-logo">
+        <Logo size={28} />
         <span class="logo-title">{siteTitle}</span>
       </a>
 

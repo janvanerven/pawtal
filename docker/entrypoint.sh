@@ -20,7 +20,7 @@ chown -R pawtal:pawtal /app/data /app/uploads
 export ORIGIN="${ORIGIN:-${BASE_URL:-http://localhost:8080}}"
 
 echo "Starting SvelteKit Node server on port 3000..."
-cd /app/frontend && gosu pawtal node build/index.js &
+cd /app/frontend && PORT=3000 gosu pawtal node build/index.js &
 SVELTEKIT_PID=$!
 
 echo "Starting Axum API server on port 8080..."

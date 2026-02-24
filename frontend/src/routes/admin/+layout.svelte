@@ -2,6 +2,7 @@
   import type { LayoutData } from './$types';
   import { page } from '$app/stores';
   import { api } from '$lib/api';
+  import Toast from '$lib/components/Toast.svelte';
 
   let { data, children }: { data: LayoutData; children: import('svelte').Snippet } = $props();
 
@@ -84,6 +85,8 @@
     {/each}
   </nav>
 </div>
+
+<Toast />
 
 <style>
   .admin-shell {

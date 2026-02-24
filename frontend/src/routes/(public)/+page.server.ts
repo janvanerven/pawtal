@@ -13,7 +13,7 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
       const pageData: Page = await pageRes.json();
       return { type: 'page' as const, page: pageData, settings };
     }
-    // Fall through to articles if page not found
+    // Fall through to default homepage if page not found
   }
 
   if (frontPageType === 'app_catalogue') {
@@ -23,12 +23,19 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
     return { type: 'apps' as const, apps, settings };
   }
 
-  // Default: articles list
-  const pageNum = url.searchParams.get('page') || '1';
-  const articlesRes = await fetch(`/api/articles?page=${pageNum}&per_page=10`);
+  // Default: curated homepage with featured apps + latest articles
+  const [articlesRes, appsRes] = await Promise.all([
+    fetch('/api/articles?page=1&per_page=6'),
+    fetch('/api/apps?page=1&per_page=3'),
+  ]);
+
   const articles: PaginatedResponse<Article> = articlesRes.ok
     ? await articlesRes.json()
-    : { data: [], total: 0, page: 1, per_page: 10 };
+    : { data: [], total: 0, page: 1, per_page: 6 };
 
-  return { type: 'articles' as const, articles, settings };
+  const featuredApps: PaginatedResponse<App> = appsRes.ok
+    ? await appsRes.json()
+    : { data: [], total: 0, page: 1, per_page: 3 };
+
+  return { type: 'articles' as const, articles, featuredApps, settings };
 };

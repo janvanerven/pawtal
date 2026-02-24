@@ -1,9 +1,11 @@
 <script lang="ts">
   import type { LayoutData } from './$types';
   import { page } from '$app/stores';
+  import { onNavigate } from '$app/navigation';
   import Navigation from '$lib/components/Navigation.svelte';
-  import SearchBar from '$lib/components/SearchBar.svelte';
   import DarkModeToggle from '$lib/components/DarkModeToggle.svelte';
+  import Toast from '$lib/components/Toast.svelte';
+  import SearchModal from '$lib/components/SearchModal.svelte';
 
   let { data, children }: { data: LayoutData; children: import('svelte').Snippet } = $props();
 
@@ -11,6 +13,7 @@
   const defaultTheme = $derived(data.settings?.default_theme || 'light');
 
   let menuOpen = $state(false);
+  let searchOpen = $state(false);
 
   function toggleMenu() {
     menuOpen = !menuOpen;
@@ -21,7 +24,28 @@
     $page.url.pathname;
     menuOpen = false;
   });
+
+  // View transitions API
+  onNavigate((navigation) => {
+    if (!document.startViewTransition) return;
+    return new Promise((resolve) => {
+      document.startViewTransition(async () => {
+        resolve();
+        await navigation.complete;
+      });
+    });
+  });
+
+  // Cmd+K search shortcut
+  function handleKeydown(e: KeyboardEvent) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      searchOpen = !searchOpen;
+    }
+  }
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <div class="public-shell">
   <!-- Header -->
@@ -29,7 +53,6 @@
     <div class="header-inner">
       <!-- Logo / site title -->
       <a href="/" class="site-logo">
-        <span class="logo-paw">🐾</span>
         <span class="logo-title">{siteTitle}</span>
       </a>
 
@@ -39,9 +62,13 @@
       </div>
 
       <div class="header-actions">
-        <div class="desktop-only">
-          <SearchBar compact />
-        </div>
+        <button class="search-trigger desktop-only" onclick={() => searchOpen = true} title="Search (Cmd+K)">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <span class="search-hint">Cmd+K</span>
+        </button>
         <DarkModeToggle defaultTheme={defaultTheme} />
         <!-- Hamburger for mobile -->
         <button
@@ -69,26 +96,15 @@
     <!-- Mobile slide-down menu -->
     {#if menuOpen}
       <div class="mobile-menu">
-        <div class="mobile-search">
-          <SearchBar />
-        </div>
         <Navigation items={data.mainMenu.items} />
       </div>
     {/if}
   </header>
 
-  <!-- Body: sidebar + content -->
-  <div class="site-body">
-    <!-- Sidebar (desktop only) -->
-    <aside class="site-sidebar desktop-only">
-      <Navigation items={data.mainMenu.items} />
-    </aside>
-
-    <!-- Main content area -->
-    <main class="site-main">
-      {@render children()}
-    </main>
-  </div>
+  <!-- Main content area (no sidebar) -->
+  <main class="site-main">
+    {@render children()}
+  </main>
 
   <!-- Footer -->
   <footer class="site-footer">
@@ -98,12 +114,25 @@
           <Navigation items={data.footerMenu.items} orientation="horizontal" />
         </nav>
       {/if}
-      <p class="footer-credit">
-        Powered by <a href="https://github.com" target="_blank" rel="noopener noreferrer">Pawtal</a>
-      </p>
+      <div class="footer-bottom">
+        <a href="/feed.xml" class="footer-rss" title="RSS Feed">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 11a9 9 0 0 1 9 9"/>
+            <path d="M4 4a16 16 0 0 1 16 16"/>
+            <circle cx="5" cy="19" r="1"/>
+          </svg>
+          RSS
+        </a>
+        <p class="footer-credit">
+          Powered by <a href="https://github.com" target="_blank" rel="noopener noreferrer">Pawtal</a>
+        </p>
+      </div>
     </div>
   </footer>
 </div>
+
+<SearchModal bind:open={searchOpen} />
+<Toast />
 
 <style>
   .public-shell {
@@ -114,19 +143,25 @@
 
   /* ---- Header ---- */
   .site-header {
-    background: var(--color-surface);
-    border-bottom: 1px solid var(--color-border);
-    box-shadow: var(--shadow-sm);
     position: sticky;
     top: 0;
     z-index: 50;
+    border-bottom: 1px solid var(--color-border);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    background: rgba(255, 248, 240, 0.85);
+    transition: background-color var(--transition-normal);
+  }
+
+  :global([data-theme="dark"]) .site-header {
+    background: rgba(12, 10, 9, 0.85);
   }
 
   .header-inner {
-    max-width: 1280px;
+    max-width: var(--width-wide);
     margin: 0 auto;
     padding: 0 var(--space-lg);
-    height: 60px;
+    height: 64px;
     display: flex;
     align-items: center;
     gap: var(--space-md);
@@ -140,15 +175,14 @@
     flex-shrink: 0;
   }
 
-  .logo-paw {
-    font-size: 1.4rem;
-  }
-
   .logo-title {
     font-family: var(--font-heading);
-    font-size: 1.25rem;
+    font-size: 1.3rem;
     font-weight: 700;
-    color: var(--color-primary);
+    background: var(--gradient-accent);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 
   .header-nav {
@@ -164,12 +198,41 @@
     margin-left: auto;
   }
 
+  .search-trigger {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: 6px 12px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+    transition: all var(--transition-fast);
+    cursor: pointer;
+    background: transparent;
+  }
+
+  .search-trigger:hover {
+    border-color: var(--color-primary);
+    color: var(--color-text);
+  }
+
+  .search-hint {
+    font-family: var(--font-body);
+    font-size: 0.7rem;
+    opacity: 0.6;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+  }
+
   .hamburger {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
     border-radius: var(--radius-sm);
     color: var(--color-text);
     transition: background var(--transition-fast);
@@ -188,62 +251,56 @@
     gap: var(--space-md);
   }
 
-  .mobile-search {
-    display: flex;
-    justify-content: stretch;
-  }
-
-  .mobile-search :global(.search-bar) {
-    max-width: 100%;
-    width: 100%;
-  }
-
-  /* ---- Body / Sidebar ---- */
-  .site-body {
-    flex: 1;
-    display: flex;
-    max-width: 1280px;
-    width: 100%;
-    margin: 0 auto;
-    padding: var(--space-xl) var(--space-lg);
-    gap: var(--space-xl);
-    align-items: flex-start;
-  }
-
-  .site-sidebar {
-    width: 240px;
-    flex-shrink: 0;
-    position: sticky;
-    top: calc(60px + var(--space-lg));
-  }
-
+  /* ---- Main content ---- */
   .site-main {
     flex: 1;
-    min-width: 0;
-    max-width: 900px;
+    width: 100%;
+    max-width: var(--width-wide);
+    margin: 0 auto;
+    padding: var(--space-xl) var(--space-lg);
   }
 
   /* ---- Footer ---- */
   .site-footer {
-    background: var(--color-surface);
+    background: var(--color-surface-elevated);
     border-top: 1px solid var(--color-border);
-    margin-top: auto;
+    margin-top: var(--space-3xl);
   }
 
   .footer-inner {
-    max-width: 1280px;
+    max-width: var(--width-wide);
     margin: 0 auto;
-    padding: var(--space-lg);
+    padding: var(--space-2xl) var(--space-lg);
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--space-md);
+    gap: var(--space-lg);
   }
 
   .footer-nav :global(.nav-list) {
     flex-direction: row;
     flex-wrap: wrap;
     justify-content: center;
+  }
+
+  .footer-bottom {
+    display: flex;
+    align-items: center;
+    gap: var(--space-lg);
+  }
+
+  .footer-rss {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+  }
+
+  .footer-rss:hover {
+    color: var(--color-primary);
   }
 
   .footer-credit {
@@ -253,7 +310,7 @@
 
   /* ---- Responsive helpers ---- */
   .desktop-only {
-    display: block;
+    display: flex;
   }
 
   .mobile-only {
@@ -269,12 +326,33 @@
       display: flex;
     }
 
-    .site-body {
+    .site-main {
       padding: var(--space-md);
     }
 
     .header-inner {
       padding: 0 var(--space-md);
     }
+  }
+
+  /* ---- View Transitions ---- */
+  @keyframes fade-in {
+    from { opacity: 0; }
+  }
+  @keyframes fade-out {
+    to { opacity: 0; }
+  }
+  @keyframes slide-from-right {
+    from { transform: translateX(20px); }
+  }
+  @keyframes slide-to-left {
+    to { transform: translateX(-20px); }
+  }
+
+  :global(::view-transition-old(root)) {
+    animation: 150ms ease-out both fade-out;
+  }
+  :global(::view-transition-new(root)) {
+    animation: 200ms ease-out both fade-in, 200ms ease-out both slide-from-right;
   }
 </style>

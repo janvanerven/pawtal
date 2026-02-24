@@ -19,5 +19,29 @@ export const load: PageServerLoad = async ({ fetch, params }) => {
     throw error(404, 'Article not found');
   }
 
-  return { article };
+  // Fetch related articles in parallel
+  const relatedRes = await fetch(`/api/articles/${params.slug}/related`);
+  const related: Article[] = relatedRes.ok ? await relatedRes.json() : [];
+
+  // Extract headings for TOC
+  const headingRegex = /<h([23])[^>]*>(.*?)<\/h\1>/gi;
+  const toc: { level: number; text: string; id: string }[] = [];
+  let match;
+  while ((match = headingRegex.exec(article.content)) !== null) {
+    const text = match[2].replace(/<[^>]*>/g, '');
+    const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    toc.push({ level: parseInt(match[1]), text, id });
+  }
+
+  // Inject IDs into headings for anchor links
+  let processedContent = article.content;
+  for (const heading of toc) {
+    const regex = new RegExp(`(<h${heading.level})(>)`, 'i');
+    processedContent = processedContent.replace(
+      regex,
+      `$1 id="${heading.id}"$2`
+    );
+  }
+
+  return { article: { ...article, content: processedContent }, related, toc };
 };

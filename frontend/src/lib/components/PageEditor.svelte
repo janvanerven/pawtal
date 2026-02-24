@@ -3,8 +3,10 @@
   import type { Page, Category } from '$lib/api/types';
   import { slugify, relativeTime } from '$lib/utils';
   import { goto } from '$app/navigation';
+  import { toasts } from '$lib/stores/toasts';
   import RichTextEditor from './RichTextEditor.svelte';
   import MediaPicker from './MediaPicker.svelte';
+  import ConfirmDialog from './ConfirmDialog.svelte';
 
   interface Props {
     page?: Page;
@@ -25,12 +27,13 @@
 
   // UI state
   let saving = $state(false);
-  let error = $state('');
-  let successMsg = $state('');
   let mediaPickerOpen = $state(false);
   let revisionsOpen = $state(false);
   let revisions = $state<import('$lib/api/types').PageRevision[]>([]);
   let loadingRevisions = $state(false);
+  let confirmDeleteOpen = $state(false);
+  let confirmRestoreOpen = $state(false);
+  let pendingRevisionId = $state('');
 
   // Auto-slug from title (only when creating new)
   let slugManuallyEdited = $state(!!existingPage?.slug);
@@ -47,12 +50,10 @@
 
   async function save(publish = false) {
     if (!title.trim()) {
-      error = 'Title is required.';
+      toasts.error('Title is required.');
       return;
     }
     saving = true;
-    error = '';
-    successMsg = '';
 
     try {
       const payload = {
@@ -73,9 +74,9 @@
         goto(`/admin/pages/${created.id}`);
         return;
       }
-      successMsg = 'Saved successfully.';
+      toasts.success('Saved successfully');
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Save failed';
+      toasts.error(e instanceof Error ? e.message : 'Save failed');
     } finally {
       saving = false;
     }
@@ -83,12 +84,12 @@
 
   async function handleDelete() {
     if (!existingPage) return;
-    if (!confirm('Move this page to trash?')) return;
     try {
       await api.admin.deletePage(existingPage.id);
+      toasts.success('Moved to trash');
       goto('/admin/pages');
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Delete failed';
+      toasts.error(e instanceof Error ? e.message : 'Delete failed');
     }
   }
 
@@ -107,20 +108,19 @@
     }
   }
 
-  async function restoreRevision(revId: string) {
-    if (!existingPage) return;
-    if (!confirm('Restore this revision? Unsaved changes will be lost.')) return;
+  async function restoreRevision() {
+    if (!existingPage || !pendingRevisionId) return;
     try {
-      const restored = await api.admin.restorePageRevision(existingPage.id, revId);
+      const restored = await api.admin.restorePageRevision(existingPage.id, pendingRevisionId);
       title = restored.title;
       content = restored.content;
-      successMsg = 'Revision restored.';
+      toasts.success('Revision restored');
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Restore failed';
+      toasts.error(e instanceof Error ? e.message : 'Restore failed');
     }
   }
 
-  function handleImageInsert(event: CustomEvent<void>) {
+  function handleImageInsert() {
     mediaPickerOpen = true;
   }
 
@@ -139,13 +139,6 @@
     <a href="/admin/pages" class="back-link">← Pages</a>
     <h1 class="editor-title">{existingPage ? 'Edit Page' : 'New Page'}</h1>
   </div>
-
-  {#if error}
-    <div class="alert alert-error">{error}</div>
-  {/if}
-  {#if successMsg}
-    <div class="alert alert-success">{successMsg}</div>
-  {/if}
 
   <div class="editor-body">
     <!-- Main editing area -->
@@ -179,7 +172,7 @@
         <RichTextEditor
           {content}
           onUpdate={(html) => { content = html; }}
-          on:insert-image={handleImageInsert}
+          onInsertImage={handleImageInsert}
         />
       </div>
     </div>
@@ -253,7 +246,7 @@
             <button
               type="button"
               class="btn btn-danger"
-              onclick={handleDelete}
+              onclick={() => confirmDeleteOpen = true}
             >
               Move to Trash
             </button>
@@ -289,7 +282,7 @@
                       type="button"
                       class="btn btn-ghost"
                       style="font-size: 0.75rem; padding: 2px 8px;"
-                      onclick={() => restoreRevision(rev.id)}
+                      onclick={() => { pendingRevisionId = rev.id; confirmRestoreOpen = true; }}
                     >Restore</button>
                   </div>
                 {/each}
@@ -304,6 +297,23 @@
 
 <!-- Media picker modal -->
 <MediaPicker bind:open={mediaPickerOpen} on:select={handleMediaSelect} />
+
+<ConfirmDialog
+  bind:open={confirmDeleteOpen}
+  title="Move to Trash"
+  message="Are you sure you want to move this page to trash?"
+  confirmLabel="Move to Trash"
+  variant="danger"
+  onConfirm={handleDelete}
+/>
+
+<ConfirmDialog
+  bind:open={confirmRestoreOpen}
+  title="Restore Revision"
+  message="Restore this revision? Unsaved changes will be lost."
+  confirmLabel="Restore"
+  onConfirm={restoreRevision}
+/>
 
 <style>
   .editor-layout {
@@ -330,16 +340,6 @@
     font-size: 1.25rem;
     margin: 0;
   }
-
-  .alert {
-    padding: var(--space-sm) var(--space-md);
-    border-radius: var(--radius-sm);
-    margin-bottom: var(--space-md);
-    font-size: 0.875rem;
-  }
-
-  .alert-error { background: #FFEBEE; color: var(--color-accent); }
-  .alert-success { background: #E8F5E9; color: #2E7D32; }
 
   .editor-body {
     display: grid;

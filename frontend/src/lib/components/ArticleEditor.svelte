@@ -3,8 +3,10 @@
   import type { Article, Category } from '$lib/api/types';
   import { slugify, relativeTime } from '$lib/utils';
   import { goto } from '$app/navigation';
+  import { toasts } from '$lib/stores/toasts';
   import RichTextEditor from './RichTextEditor.svelte';
   import MediaPicker from './MediaPicker.svelte';
+  import ConfirmDialog from './ConfirmDialog.svelte';
 
   interface Props {
     article?: Article;
@@ -13,7 +15,7 @@
 
   let { article: existingArticle, categories }: Props = $props();
 
-  // Form state — initialized once from the prop; editors don't reactively follow prop changes
+  // Form state
   let title = $state(existingArticle?.title ?? '');
   let slug = $state(existingArticle?.slug ?? '');
   let shortText = $state(existingArticle?.short_text ?? '');
@@ -23,19 +25,30 @@
   );
   let publishAt = $state(existingArticle?.publish_at ?? '');
   let selectedCategoryIds = $state<string[]>([]);
+  let coverImageId = $state<string | null>(existingArticle?.cover_image_id ?? null);
 
   // UI state
   let saving = $state(false);
-  let error = $state('');
-  let successMsg = $state('');
+  let hasUnsavedChanges = $state(false);
   let mediaPickerOpen = $state(false);
+  let coverPickerOpen = $state(false);
   let revisionsOpen = $state(false);
   let revisions = $state<import('$lib/api/types').ArticleRevision[]>([]);
   let loadingRevisions = $state(false);
 
+  // Confirm dialogs
+  let confirmDeleteOpen = $state(false);
+  let confirmRestoreOpen = $state(false);
+  let pendingRevisionId = $state('');
+
   let slugManuallyEdited = $state(!!existingArticle?.slug);
 
+  const coverImageUrl = $derived(
+    coverImageId ? `/uploads/${coverImageId}/medium.webp` : null
+  );
+
   function handleTitleInput() {
+    hasUnsavedChanges = true;
     if (!slugManuallyEdited) {
       slug = slugify(title);
     }
@@ -43,16 +56,20 @@
 
   function handleSlugInput() {
     slugManuallyEdited = true;
+    hasUnsavedChanges = true;
+  }
+
+  function handleContentUpdate(html: string) {
+    content = html;
+    hasUnsavedChanges = true;
   }
 
   async function save(publish = false) {
     if (!title.trim()) {
-      error = 'Title is required.';
+      toasts.error('Title is required.');
       return;
     }
     saving = true;
-    error = '';
-    successMsg = '';
 
     try {
       const payload = {
@@ -63,6 +80,7 @@
         status: publish ? 'published' as const : status,
         publish_at: status === 'scheduled' && publishAt ? publishAt : null,
         category_ids: selectedCategoryIds,
+        cover_image_id: coverImageId,
       };
 
       if (existingArticle) {
@@ -74,9 +92,10 @@
         goto(`/admin/articles/${created.id}`);
         return;
       }
-      successMsg = 'Saved successfully.';
+      hasUnsavedChanges = false;
+      toasts.success('Saved successfully');
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Save failed';
+      toasts.error(e instanceof Error ? e.message : 'Save failed');
     } finally {
       saving = false;
     }
@@ -84,12 +103,12 @@
 
   async function handleDelete() {
     if (!existingArticle) return;
-    if (!confirm('Move this article to trash?')) return;
     try {
       await api.admin.deleteArticle(existingArticle.id);
+      toasts.success('Moved to trash');
       goto('/admin/articles');
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Delete failed';
+      toasts.error(e instanceof Error ? e.message : 'Delete failed');
     }
   }
 
@@ -108,17 +127,16 @@
     }
   }
 
-  async function restoreRevision(revId: string) {
-    if (!existingArticle) return;
-    if (!confirm('Restore this revision? Unsaved changes will be lost.')) return;
+  async function restoreRevision() {
+    if (!existingArticle || !pendingRevisionId) return;
     try {
-      const restored = await api.admin.restoreArticleRevision(existingArticle.id, revId);
+      const restored = await api.admin.restoreArticleRevision(existingArticle.id, pendingRevisionId);
       title = restored.title;
       shortText = restored.short_text;
       content = restored.content;
-      successMsg = 'Revision restored.';
+      toasts.success('Revision restored');
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Restore failed';
+      toasts.error(e instanceof Error ? e.message : 'Restore failed');
     }
   }
 
@@ -132,23 +150,49 @@
       detail: { src: `/uploads/${media.id}/${media.filename}`, alt: media.alt_text || media.original_filename }
     }));
   }
+
+  function handleCoverSelect(event: CustomEvent<import('$lib/api/types').Media>) {
+    const media = event.detail;
+    coverImageId = media.id;
+    coverPickerOpen = false;
+    hasUnsavedChanges = true;
+  }
 </script>
 
 <div class="editor-layout">
   <div class="editor-header">
     <a href="/admin/articles" class="back-link">← Articles</a>
     <h1 class="editor-title">{existingArticle ? 'Edit Article' : 'New Article'}</h1>
+    {#if existingArticle}
+      <span class="save-indicator" class:unsaved={hasUnsavedChanges} class:saved={!hasUnsavedChanges}>
+        {hasUnsavedChanges ? 'Unsaved changes' : 'Saved'}
+      </span>
+    {/if}
   </div>
-
-  {#if error}
-    <div class="alert alert-error">{error}</div>
-  {/if}
-  {#if successMsg}
-    <div class="alert alert-success">{successMsg}</div>
-  {/if}
 
   <div class="editor-body">
     <div class="editor-main">
+      <!-- Cover Image -->
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="cover-image-area" onclick={() => coverPickerOpen = true}>
+        {#if coverImageUrl}
+          <img src={coverImageUrl} alt="Cover" class="cover-preview" />
+          <button
+            type="button"
+            class="cover-remove"
+            onclick={(e: MouseEvent) => { e.stopPropagation(); coverImageId = null; hasUnsavedChanges = true; }}
+          >
+            Remove cover
+          </button>
+        {:else}
+          <div class="cover-placeholder">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            <span>Add cover image</span>
+          </div>
+        {/if}
+      </div>
+
       <div class="field">
         <input
           type="text"
@@ -181,6 +225,7 @@
           placeholder="A brief summary of this article..."
           rows="3"
           class="short-text-area"
+          oninput={() => hasUnsavedChanges = true}
         ></textarea>
       </div>
 
@@ -188,8 +233,8 @@
         <span class="field-label">Content</span>
         <RichTextEditor
           {content}
-          onUpdate={(html) => { content = html; }}
-          on:insert-image={handleImageInsert}
+          onUpdate={handleContentUpdate}
+          onInsertImage={handleImageInsert}
         />
       </div>
     </div>
@@ -259,7 +304,7 @@
             <button
               type="button"
               class="btn btn-danger"
-              onclick={handleDelete}
+              onclick={() => confirmDeleteOpen = true}
             >
               Move to Trash
             </button>
@@ -294,7 +339,7 @@
                       type="button"
                       class="btn btn-ghost"
                       style="font-size: 0.75rem; padding: 2px 8px;"
-                      onclick={() => restoreRevision(rev.id)}
+                      onclick={() => { pendingRevisionId = rev.id; confirmRestoreOpen = true; }}
                     >Restore</button>
                   </div>
                 {/each}
@@ -308,6 +353,24 @@
 </div>
 
 <MediaPicker bind:open={mediaPickerOpen} on:select={handleMediaSelect} />
+<MediaPicker bind:open={coverPickerOpen} on:select={handleCoverSelect} />
+
+<ConfirmDialog
+  bind:open={confirmDeleteOpen}
+  title="Move to Trash"
+  message="Are you sure you want to move this article to trash?"
+  confirmLabel="Move to Trash"
+  variant="danger"
+  onConfirm={handleDelete}
+/>
+
+<ConfirmDialog
+  bind:open={confirmRestoreOpen}
+  title="Restore Revision"
+  message="Restore this revision? Unsaved changes will be lost."
+  confirmLabel="Restore"
+  onConfirm={restoreRevision}
+/>
 
 <style>
   .editor-layout { max-width: 1200px; }
@@ -323,14 +386,70 @@
   .back-link:hover { color: var(--color-text); }
   .editor-title { font-size: 1.25rem; margin: 0; }
 
-  .alert {
-    padding: var(--space-sm) var(--space-md);
-    border-radius: var(--radius-sm);
-    margin-bottom: var(--space-md);
-    font-size: 0.875rem;
+  .save-indicator {
+    margin-left: auto;
+    font-size: 0.75rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
   }
-  .alert-error { background: #FFEBEE; color: var(--color-accent); }
-  .alert-success { background: #E8F5E9; color: #2E7D32; }
+  .save-indicator::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+  .save-indicator.saved { color: var(--color-text-light); }
+  .save-indicator.saved::before { background: #7BA68C; }
+  .save-indicator.unsaved { color: var(--color-primary); }
+  .save-indicator.unsaved::before { background: var(--color-primary); }
+
+  /* Cover image area */
+  .cover-image-area {
+    width: 100%;
+    border: 2px dashed var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color var(--transition-fast);
+    position: relative;
+    background: transparent;
+    padding: 0;
+    text-align: left;
+  }
+  .cover-image-area:hover { border-color: var(--color-primary); }
+
+  .cover-preview {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+    display: block;
+  }
+
+  .cover-remove {
+    position: absolute;
+    top: var(--space-sm);
+    right: var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+    background: rgba(0,0,0,0.6);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+  .cover-remove:hover { background: rgba(0,0,0,0.8); }
+
+  .cover-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    padding: var(--space-xl);
+    color: var(--color-text-light);
+    font-size: 0.85rem;
+  }
 
   .editor-body {
     display: grid;

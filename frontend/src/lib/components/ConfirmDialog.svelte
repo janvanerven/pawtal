@@ -9,7 +9,7 @@
     cancelLabel?: string;
     variant?: 'danger' | 'default';
     onConfirm: () => void;
-    onCancel: () => void;
+    onCancel?: () => void;
   }
 
   let {
@@ -29,7 +29,7 @@
   }
 
   function handleCancel() {
-    onCancel();
+    onCancel?.();
     open = false;
   }
 

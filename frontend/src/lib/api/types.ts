@@ -19,6 +19,7 @@ export interface Page {
   created_at: string;
   updated_at: string;
   trashed_at: string | null;
+  template: 'default' | 'project';
 }
 
 export interface PageRevision {
@@ -42,6 +43,8 @@ export interface Article {
   created_at: string;
   updated_at: string;
   trashed_at: string | null;
+  cover_image_id: string | null;
+  reading_time_minutes: number;
 }
 
 export interface ArticleRevision {

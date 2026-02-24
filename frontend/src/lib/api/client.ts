@@ -32,6 +32,7 @@ export const api = {
   getPage: (slug: string) => fetchApi<Page>(`/pages/${slug}`),
   listArticles: (page = 1, perPage = 20) => fetchApi<PaginatedResponse<Article>>(`/articles?page=${page}&per_page=${perPage}`),
   getArticle: (slug: string) => fetchApi<Article>(`/articles/${slug}`),
+  getRelatedArticles: (slug: string) => fetchApi<Article[]>(`/articles/${slug}/related`),
   listApps: (page = 1) => fetchApi<PaginatedResponse<App>>(`/apps?page=${page}`),
   getMenu: (name: string) => fetchApi<MenuResponse>(`/menus/${name}`),
   getPublicSettings: () => fetchApi<Record<string, string>>(`/settings/public`),

@@ -6,6 +6,7 @@
 
   // Initialize form from loaded settings
   let siteTitle = $state(data.settings['site_title'] ?? '');
+  let siteDescription = $state(data.settings['site_description'] ?? '');
   let frontPageType = $state<'page' | 'articles' | 'app_catalogue'>(
     (data.settings['front_page_type'] as 'page' | 'articles' | 'app_catalogue') ?? 'articles'
   );
@@ -25,6 +26,7 @@
     try {
       await api.admin.updateSettings({
         site_title: siteTitle,
+        site_description: siteDescription,
         front_page_type: frontPageType,
         front_page_slug: frontPageType === 'page' ? frontPageSlug : '',
         apps_per_page: appsPerPage,
@@ -63,6 +65,12 @@
       <div class="field">
         <label for="site-title">Site Title</label>
         <input id="site-title" type="text" bind:value={siteTitle} placeholder="My Pawtal Site" />
+      </div>
+
+      <div class="field">
+        <label for="site-description">Site Description</label>
+        <input id="site-description" type="text" bind:value={siteDescription} placeholder="Projects, articles, and more." />
+        <span class="field-hint">Shown as the subtitle on the homepage hero.</span>
       </div>
     </div>
 
@@ -181,6 +189,7 @@
     cursor: pointer;
   }
   .checkbox-field input[type="checkbox"] { width: auto; border: none; padding: 0; margin: 0; }
+  .field-hint { font-size: 0.75rem; color: var(--color-text-muted); }
 
   .form-actions {
     padding: var(--space-lg);

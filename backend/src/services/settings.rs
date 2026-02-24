@@ -18,11 +18,9 @@ const PUBLIC_KEYS: &[&str] = &[
     "site_description",
     "front_page_type",
     "front_page_slug",
-    "front_page_id",
     "apps_per_page",
     "app_catalogue_intro",
     "dark_mode_default",
-    "default_theme",
 ];
 
 /// All known settings keys. Updates with unrecognised keys are rejected.
@@ -31,13 +29,9 @@ const ALLOWED_KEYS: &[&str] = &[
     "site_description",
     "front_page_type",
     "front_page_slug",
-    "front_page_id",
     "apps_per_page",
     "app_catalogue_intro",
     "dark_mode_default",
-    "default_theme",
-    "site_logo",
-    "site_favicon",
 ];
 
 // ─── Public service functions ─────────────────────────────────────────────────

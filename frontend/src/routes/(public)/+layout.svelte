@@ -11,7 +11,7 @@
   let { data, children }: { data: LayoutData; children: import('svelte').Snippet } = $props();
 
   const siteTitle = $derived(data.settings?.site_title || 'Pawtal');
-  const defaultTheme = $derived(data.settings?.default_theme || 'light');
+  const defaultTheme = $derived(data.settings?.dark_mode_default === 'true' ? 'dark' : 'light');
 
   let menuOpen = $state(false);
   let searchOpen = $state(false);

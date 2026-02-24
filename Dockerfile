@@ -31,7 +31,7 @@ RUN npm run build
 FROM node:22-bookworm-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates libsqlite3-0 curl gosu \
+    && apt-get install -y --no-install-recommends ca-certificates libsqlite3-0 sqlite3 curl gosu \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

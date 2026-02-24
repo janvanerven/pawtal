@@ -38,9 +38,7 @@ pub struct CallbackParams {
 /// redirects the browser to the IdP's login page. The CSRF `state` parameter
 /// is stored in a short-lived HttpOnly cookie and verified in the callback.
 pub async fn login(State(state): State<AppState>) -> AppResult<impl IntoResponse> {
-    let client = reqwest::Client::new();
-
-    let discovery = discover_oidc(&client, &state.config.oauth2_issuer_url).await?;
+    let discovery = discover_oidc(&state.http_client, &state.config.oauth2_issuer_url).await?;
 
     let csrf_state = Uuid::new_v4().to_string();
     let auth_url = build_auth_url(&discovery, &state.config, &csrf_state);
@@ -89,15 +87,13 @@ pub async fn callback(
     if params.state != stored_state {
         return Err(AppError::BadRequest("OAuth state mismatch".into()));
     }
-    let client = reqwest::Client::new();
-
-    let discovery = discover_oidc(&client, &state.config.oauth2_issuer_url).await?;
+    let discovery = discover_oidc(&state.http_client, &state.config.oauth2_issuer_url).await?;
 
     // Exchange the authorization code for tokens.
-    let tokens = exchange_code(&client, &discovery, &state.config, &params.code).await?;
+    let tokens = exchange_code(&state.http_client, &discovery, &state.config, &params.code).await?;
 
     // Fetch the user's identity claims.
-    let userinfo = fetch_userinfo(&client, &discovery, &tokens.access_token).await?;
+    let userinfo = fetch_userinfo(&state.http_client, &discovery, &tokens.access_token).await?;
 
     // Derive a display name: prefer `name`, fall back to `preferred_username`,
     // then to the `sub` identifier so the field is never empty.
@@ -139,11 +135,16 @@ pub async fn callback(
     // Create a session and get the token that will become the cookie value.
     let session_token = create_session(&state.db, &user_id).await?;
 
-    // Build an HttpOnly, SameSite=Strict cookie.
+    // Build an HttpOnly, SameSite=Strict, Secure cookie.
     // Max-Age=604800 matches the 7-day TTL used in session creation.
+    let secure_flag = if state.config.base_url.starts_with("https") {
+        "; Secure"
+    } else {
+        ""
+    };
     let cookie = format!(
-        "pawtal_session={}; HttpOnly; SameSite=Strict; Path=/; Max-Age=604800",
-        session_token
+        "pawtal_session={}; HttpOnly; SameSite=Strict; Path=/; Max-Age=604800{}",
+        session_token, secure_flag
     );
 
     // Clear the OAuth state cookie now that it has been verified.
@@ -240,6 +241,11 @@ pub async fn update_user_role(
     Path(id): Path<String>,
     Json(body): Json<RoleUpdate>,
 ) -> AppResult<Json<User>> {
+    // Only admins can change roles (defence-in-depth; also enforced by middleware).
+    if current_user.role != "admin" {
+        return Err(AppError::Forbidden);
+    }
+
     // Validate the role before touching the database.
     if body.role != "admin" && body.role != "editor" {
         return Err(AppError::BadRequest(format!(

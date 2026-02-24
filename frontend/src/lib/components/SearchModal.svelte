@@ -74,11 +74,22 @@
     }
   }
 
+  function escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
   function highlightMatch(text: string): string {
-    if (!query.trim()) return text;
+    if (!query.trim()) return escapeHtml(text);
+    // Escape HTML in the text first, then wrap matches in <mark> tags
+    const safe = escapeHtml(text);
     const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`(${escaped})`, 'gi');
-    return text.replace(regex, '<mark>$1</mark>');
+    const safeQuery = escapeHtml(escaped);
+    const regex = new RegExp(`(${safeQuery})`, 'gi');
+    return safe.replace(regex, '<mark>$1</mark>');
   }
 
   function typeLabel(type: string): string {

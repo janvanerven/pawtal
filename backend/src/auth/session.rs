@@ -1,19 +1,25 @@
 //! Session lifecycle management backed by SQLite.
 //!
 //! Sessions are identified by a randomly generated UUID v4 token stored in an
-//! HttpOnly cookie. The token is stored hashed… actually stored plaintext here
-//! because SQLite is local and the `session_secret` from config is used for
-//! signing elsewhere; keeping this simple and auditable is the right tradeoff
-//! for an on-premises CMS where the DB isn't publicly reachable.
+//! HttpOnly cookie. The token is hashed with SHA-256 before storage so that a
+//! database leak does not directly expose usable session credentials.
 //!
 //! Sessions expire after 7 days. Expired session cleanup can be triggered on a
 //! schedule or opportunistically.
 
+use sha2::{Digest, Sha256};
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
 use crate::db::models::User;
 use crate::error::{AppError, AppResult};
+
+/// Returns the hex-encoded SHA-256 hash of a session token.
+fn hash_token(token: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(token.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
 
 /// How long a session lives before it expires (7 days in seconds).
 const SESSION_TTL_SECONDS: i64 = 7 * 24 * 60 * 60;
@@ -25,6 +31,7 @@ const SESSION_TTL_SECONDS: i64 = 7 * 24 * 60 * 60;
 pub async fn create_session(pool: &SqlitePool, user_id: &str) -> AppResult<String> {
     let session_id = Uuid::new_v4().to_string();
     let token = Uuid::new_v4().to_string();
+    let token_hash = hash_token(&token);
 
     sqlx::query(
         r#"
@@ -40,11 +47,12 @@ pub async fn create_session(pool: &SqlitePool, user_id: &str) -> AppResult<Strin
     )
     .bind(&session_id)
     .bind(user_id)
-    .bind(&token)
+    .bind(&token_hash)
     .bind(SESSION_TTL_SECONDS.to_string())
     .execute(pool)
     .await?;
 
+    // Return the raw token for the cookie; only the hash is stored.
     Ok(token)
 }
 
@@ -54,6 +62,8 @@ pub async fn create_session(pool: &SqlitePool, user_id: &str) -> AppResult<Strin
 /// Expired sessions are left in the database; use `cleanup_expired_sessions` to
 /// remove them in bulk.
 pub async fn validate_session(pool: &SqlitePool, token: &str) -> AppResult<User> {
+    let token_hash = hash_token(token);
+
     let user = sqlx::query_as::<_, User>(
         r#"
         SELECT u.id, u.external_id, u.email, u.display_name, u.role,
@@ -64,7 +74,7 @@ pub async fn validate_session(pool: &SqlitePool, token: &str) -> AppResult<User>
           AND s.expires_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
         "#,
     )
-    .bind(token)
+    .bind(&token_hash)
     .fetch_optional(pool)
     .await?
     .ok_or(AppError::Unauthorized)?;
@@ -77,8 +87,10 @@ pub async fn validate_session(pool: &SqlitePool, token: &str) -> AppResult<User>
 /// Silently succeeds if the token doesn't exist (already expired or never
 /// created) — the end result is the same: no active session.
 pub async fn delete_session(pool: &SqlitePool, token: &str) -> AppResult<()> {
+    let token_hash = hash_token(token);
+
     sqlx::query("DELETE FROM sessions WHERE token = ?")
-        .bind(token)
+        .bind(&token_hash)
         .execute(pool)
         .await?;
 

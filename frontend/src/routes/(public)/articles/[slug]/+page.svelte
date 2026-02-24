@@ -62,7 +62,7 @@
   <!-- Cover image -->
   {#if coverImageUrl}
     <div class="article-cover">
-      <img src={coverImageUrl} alt={data.article.title} />
+      <img src={coverImageUrl} alt={data.article.title} fetchpriority="high" />
     </div>
   {/if}
 

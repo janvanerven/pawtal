@@ -157,7 +157,8 @@
     z-index: 50;
   }
 
-  .navigation.horizontal .nav-item.has-children:hover .nav-submenu {
+  .navigation.horizontal .nav-item.has-children:hover .nav-submenu,
+  .navigation.horizontal .nav-item.has-children:focus-within .nav-submenu {
     display: flex;
     flex-direction: column;
   }

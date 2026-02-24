@@ -5,6 +5,16 @@
 
   const totalPages = $derived(Math.ceil(data.apps.total / data.apps.per_page));
   const currentPage = $derived(data.apps.page);
+
+  /** Only allow http/https URLs to prevent javascript: injection. */
+  function safeUrl(url: string | null | undefined): string | undefined {
+    if (!url) return undefined;
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'https:' || parsed.protocol === 'http:') return url;
+    } catch { /* invalid URL */ }
+    return undefined;
+  }
 </script>
 
 <svelte:head>
@@ -45,9 +55,9 @@
             {/if}
           </div>
           <div class="app-actions">
-            {#if app.url}
+            {#if safeUrl(app.url)}
               <a
-                href={app.url}
+                href={safeUrl(app.url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 class="btn btn-primary"

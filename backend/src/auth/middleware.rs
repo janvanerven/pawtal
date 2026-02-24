@@ -65,3 +65,23 @@ pub async fn require_auth(
     Ok(next.run(request).await)
 }
 
+/// Middleware that requires the authenticated user to have the "admin" role.
+///
+/// Must be applied **after** `require_auth` so that `User` is already in
+/// request extensions. Returns 403 Forbidden for non-admin users.
+pub async fn require_admin(
+    request: Request,
+    next: Next,
+) -> Result<Response, AppError> {
+    let user = request
+        .extensions()
+        .get::<crate::db::models::User>()
+        .ok_or(AppError::Unauthorized)?;
+
+    if user.role != "admin" {
+        return Err(AppError::Forbidden);
+    }
+
+    Ok(next.run(request).await)
+}
+

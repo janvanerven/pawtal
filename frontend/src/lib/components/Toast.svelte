@@ -10,7 +10,7 @@
       transition:fly={{ x: 300, duration: 300 }}
     >
       <span class="toast-message">{toast.message}</span>
-      <button class="toast-close" onclick={() => toasts.remove(toast.id)}>&times;</button>
+      <button class="toast-close" aria-label="Dismiss notification" onclick={() => toasts.remove(toast.id)}>&times;</button>
     </div>
   {/each}
 </div>

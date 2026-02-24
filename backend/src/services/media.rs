@@ -98,6 +98,15 @@ pub async fn upload_media(
 ) -> AppResult<Media> {
     let id = Uuid::new_v4().to_string();
 
+    // Validate the MIME type against the allowlist to prevent arbitrary file
+    // uploads (e.g. SVGs with embedded scripts, HTML files).
+    if !ALLOWED_MIME_TYPES.contains(&mime_type) {
+        return Err(AppError::BadRequest(format!(
+            "File type '{}' is not allowed",
+            mime_type
+        )));
+    }
+
     // Derive a safe filename from the original. Reject empty names up-front.
     let safe_name = sanitize_filename(original_filename);
     if safe_name.is_empty() || safe_name.chars().all(|c| c == '.') {
@@ -249,6 +258,23 @@ fn is_image_mime(mime_type: &str) -> bool {
     )
 }
 
+/// MIME types that are allowed to be uploaded. SVG is intentionally excluded
+/// because it can contain embedded JavaScript (stored XSS vector).
+const ALLOWED_MIME_TYPES: &[&str] = &[
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/bmp",
+    "image/tiff",
+    "application/pdf",
+    "video/mp4",
+    "video/webm",
+    "audio/mpeg",
+    "audio/ogg",
+];
+
 /// Strips path components and characters that would be unsafe in a filename,
 /// preserving the original extension. The result is always lowercase for
 /// consistent filesystem behaviour on case-sensitive and case-insensitive
@@ -264,7 +290,8 @@ fn sanitize_filename(name: &str) -> String {
     // Keep alphanumerics, dots, hyphens, and underscores; replace anything
     // else with an underscore. This covers common problem chars: spaces,
     // colons, angle brackets, etc.
-    base.chars()
+    let mut result: String = base
+        .chars()
         .map(|c| {
             if c.is_alphanumeric() || c == '.' || c == '-' || c == '_' {
                 c.to_ascii_lowercase()
@@ -272,5 +299,20 @@ fn sanitize_filename(name: &str) -> String {
                 '_'
             }
         })
-        .collect()
+        .collect();
+
+    // Limit filename length to 200 chars to stay within filesystem limits.
+    // Preserve the extension when truncating.
+    const MAX_LEN: usize = 200;
+    if result.len() > MAX_LEN {
+        if let Some(ext_start) = result.rfind('.') {
+            let ext = result[ext_start..].to_string();
+            result.truncate(MAX_LEN - ext.len());
+            result.push_str(&ext);
+        } else {
+            result.truncate(MAX_LEN);
+        }
+    }
+
+    result
 }

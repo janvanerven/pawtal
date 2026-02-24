@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # ── Entrypoint for the Pawtal single-container deployment ─────────────────────
 #
@@ -28,6 +28,8 @@ trap 'kill $SVELTEKIT_PID $AXUM_PID 2>/dev/null; wait' TERM INT
 # Wait for either child to exit. If one dies, bring down the other so Docker
 # can detect the failure and restart the container.
 wait -n
-echo "A child process exited — shutting down container."
+EXIT_CODE=$?
+echo "A child process exited (code $EXIT_CODE) — shutting down container."
 kill $SVELTEKIT_PID $AXUM_PID 2>/dev/null
 wait
+exit $EXIT_CODE

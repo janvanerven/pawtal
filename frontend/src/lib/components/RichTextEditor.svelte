@@ -192,8 +192,16 @@
   function insertLink() {
     const url = window.prompt('Enter URL:');
     if (!url) return;
+    // Validate URL scheme to prevent javascript: XSS
+    try {
+      const parsed = new URL(url, window.location.origin);
+      if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) return;
+    } catch {
+      return;
+    }
     if (editor?.state.selection.empty) {
-      editor.chain().focus().insertContent(`<a href="${url}">${url}</a>`).run();
+      // Use TipTap API instead of raw HTML interpolation to prevent attribute injection
+      editor.chain().focus().insertContent(url).setLink({ href: url }).run();
     } else {
       editor?.chain().focus().setLink({ href: url }).run();
     }

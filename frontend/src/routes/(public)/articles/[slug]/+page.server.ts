@@ -37,10 +37,12 @@ export const load: PageServerLoad = async ({ fetch, params }) => {
   // Inject IDs into headings for anchor links
   let processedContent = article.content;
   for (const heading of toc) {
+    // Strip any characters that could break out of the attribute
+    const safeId = heading.id.replace(/[^a-z0-9-]/g, '');
     const regex = new RegExp(`(<h${heading.level})(>)`, 'i');
     processedContent = processedContent.replace(
       regex,
-      `$1 id="${heading.id}"$2`
+      `$1 id="${safeId}"$2`
     );
   }
 

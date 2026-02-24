@@ -11,7 +11,7 @@ use serde_json::json;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
-use crate::db::models::{Article, ArticleRevision, Category, CreateArticle, PaginatedResponse,
+use crate::db::models::{Article, ArticleRevision, CreateArticle, PaginatedResponse,
     PaginationParams, UpdateArticle};
 use crate::error::{AppError, AppResult};
 use crate::helpers::slugify;
@@ -176,6 +176,7 @@ pub async fn create_article(
     let short_text = input.short_text.unwrap_or_default();
     let content = input.content.unwrap_or_default();
     let status = input.status.unwrap_or_else(|| "draft".to_owned());
+    validate_status(&status)?;
     let reading_time = estimate_reading_time(&content);
 
     sqlx::query(
@@ -235,6 +236,7 @@ pub async fn update_article(
     let short_text = input.short_text.unwrap_or_else(|| existing.short_text.clone());
     let content = input.content.unwrap_or_else(|| existing.content.clone());
     let status = input.status.unwrap_or_else(|| existing.status.clone());
+    validate_status(&status)?;
     let publish_at = if input.publish_at.is_some() {
         input.publish_at
     } else {
@@ -449,6 +451,19 @@ pub async fn get_related_articles(
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
+/// Validates that a status string is one of the allowed values.
+fn validate_status(status: &str) -> AppResult<()> {
+    const VALID: &[&str] = &["draft", "published", "scheduled"];
+    if !VALID.contains(&status) {
+        return Err(AppError::BadRequest(format!(
+            "Invalid status '{}'. Must be one of: {}",
+            status,
+            VALID.join(", ")
+        )));
+    }
+    Ok(())
+}
+
 /// Estimates reading time from HTML content at ~200 words per minute.
 ///
 /// Strips HTML tags by walking the characters, then counts whitespace-delimited
@@ -523,25 +538,6 @@ async fn set_article_categories(
     }
 
     Ok(())
-}
-
-/// Fetches the categories associated with an article via the join table.
-#[allow(dead_code)]
-async fn get_article_categories(
-    pool: &SqlitePool,
-    article_id: &str,
-) -> AppResult<Vec<Category>> {
-    let categories = sqlx::query_as::<_, Category>(
-        "SELECT c.id, c.name, c.slug \
-         FROM categories c \
-         INNER JOIN article_categories ac ON ac.category_id = c.id \
-         WHERE ac.article_id = ?",
-    )
-    .bind(article_id)
-    .fetch_all(pool)
-    .await?;
-
-    Ok(categories)
 }
 
 /// Returns `Conflict` if `slug` is already used by an article other than

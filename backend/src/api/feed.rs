@@ -73,11 +73,11 @@ pub async fn atom_feed(State(state): State<AppState>) -> impl IntoResponse {
         ));
         xml.push_str(&format!(
             "    <link href=\"{}/articles/{}\"/>\n",
-            base_url, article.slug
+            escape_xml(base_url), escape_xml(&article.slug)
         ));
         xml.push_str(&format!(
             "    <id>{}/articles/{}</id>\n",
-            base_url, article.slug
+            escape_xml(base_url), escape_xml(&article.slug)
         ));
         xml.push_str(&format!(
             "    <published>{}</published>\n",
@@ -111,4 +111,5 @@ fn escape_xml(s: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+        .replace('\'', "&apos;")
 }

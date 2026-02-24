@@ -22,6 +22,19 @@ const PUBLIC_KEYS: &[&str] = &[
     "dark_mode_default",
 ];
 
+/// All known settings keys. Updates with unrecognised keys are rejected.
+const ALLOWED_KEYS: &[&str] = &[
+    "site_title",
+    "front_page_type",
+    "front_page_id",
+    "apps_per_page",
+    "app_catalogue_intro",
+    "dark_mode_default",
+    "site_description",
+    "site_logo",
+    "site_favicon",
+];
+
 // ─── Public service functions ─────────────────────────────────────────────────
 
 /// Returns every key-value pair in `site_settings`. Admin-only.
@@ -69,6 +82,16 @@ pub async fn update_settings(
     updates: HashMap<String, String>,
     user_id: &str,
 ) -> AppResult<()> {
+    // Reject unrecognised keys to prevent settings table pollution.
+    for key in updates.keys() {
+        if !ALLOWED_KEYS.contains(&key.as_str()) {
+            return Err(crate::error::AppError::BadRequest(format!(
+                "Unknown setting key: '{}'",
+                key
+            )));
+        }
+    }
+
     for (key, value) in &updates {
         sqlx::query(
             "INSERT INTO site_settings (key, value, updated_at) \

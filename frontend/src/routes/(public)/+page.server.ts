@@ -17,7 +17,7 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
   }
 
   if (frontPageType === 'app_catalogue') {
-    const pageNum = url.searchParams.get('page') || '1';
+    const pageNum = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10) || 1);
     const appsRes = await fetch(`/api/apps?page=${pageNum}`);
     const apps: PaginatedResponse<App> = appsRes.ok ? await appsRes.json() : { data: [], total: 0, page: 1, per_page: 20 };
     return { type: 'apps' as const, apps, settings };

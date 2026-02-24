@@ -8,7 +8,7 @@ use serde_json::json;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
-use crate::db::models::{Category, CreatePage, Page, PageRevision, PaginatedResponse,
+use crate::db::models::{CreatePage, Page, PageRevision, PaginatedResponse,
     PaginationParams, UpdatePage};
 use crate::error::{AppError, AppResult};
 use crate::helpers::slugify;
@@ -132,6 +132,7 @@ pub async fn create_page(
     let id = Uuid::new_v4().to_string();
     let content = input.content.unwrap_or_default();
     let status = input.status.unwrap_or_else(|| "draft".to_owned());
+    validate_status(&status)?;
     let template = input.template.unwrap_or_else(|| "default".to_owned());
 
     sqlx::query(
@@ -186,6 +187,7 @@ pub async fn update_page(
     let title = input.title.unwrap_or_else(|| existing.title.clone());
     let content = input.content.unwrap_or_else(|| existing.content.clone());
     let status = input.status.unwrap_or_else(|| existing.status.clone());
+    validate_status(&status)?;
     let publish_at = if input.publish_at.is_some() {
         input.publish_at
     } else {
@@ -359,6 +361,19 @@ pub async fn restore_revision(
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
+/// Validates that a status string is one of the allowed values.
+fn validate_status(status: &str) -> AppResult<()> {
+    const VALID: &[&str] = &["draft", "published", "scheduled"];
+    if !VALID.contains(&status) {
+        return Err(AppError::BadRequest(format!(
+            "Invalid status '{}'. Must be one of: {}",
+            status,
+            VALID.join(", ")
+        )));
+    }
+    Ok(())
+}
+
 /// Inserts a revision row for the given page's current title and content.
 async fn create_revision(
     pool: &SqlitePool,
@@ -407,22 +422,6 @@ async fn set_page_categories(
     }
 
     Ok(())
-}
-
-/// Fetches the categories associated with a page via the join table.
-#[allow(dead_code)] // Used by future article service; kept here for symmetry.
-async fn get_page_categories(pool: &SqlitePool, page_id: &str) -> AppResult<Vec<Category>> {
-    let categories = sqlx::query_as::<_, Category>(
-        "SELECT c.id, c.name, c.slug \
-         FROM categories c \
-         INNER JOIN page_categories pc ON pc.category_id = c.id \
-         WHERE pc.page_id = ?",
-    )
-    .bind(page_id)
-    .fetch_all(pool)
-    .await?;
-
-    Ok(categories)
 }
 
 /// Returns `Conflict` if `slug` is already used by a page other than

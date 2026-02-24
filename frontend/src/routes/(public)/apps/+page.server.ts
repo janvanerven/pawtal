@@ -2,7 +2,7 @@ import type { PageServerLoad } from './$types';
 import type { App, PaginatedResponse } from '$lib/api/types';
 
 export const load: PageServerLoad = async ({ fetch, url }) => {
-  const pageNum = url.searchParams.get('page') || '1';
+  const pageNum = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10) || 1);
 
   const [appsRes, settingsRes] = await Promise.all([
     fetch(`/api/apps?page=${pageNum}`),

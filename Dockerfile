@@ -6,7 +6,7 @@ WORKDIR /app/backend
 # The dummy main.rs keeps the crate valid without the real source.
 COPY backend/Cargo.toml backend/Cargo.lock ./
 RUN mkdir src && echo 'fn main() {}' > src/main.rs
-RUN cargo build --release 2>/dev/null || true
+RUN cargo build --release || true
 
 # Now copy real source and force a rebuild of the final binary.
 COPY backend/src ./src
@@ -49,9 +49,13 @@ COPY --from=frontend-builder /app/frontend/package.json ./frontend/package.json
 COPY docker/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
-# Persistent data lives on mounted volumes; create the directories so the app
-# can start even if volumes are not yet mounted.
-RUN mkdir -p data uploads
+# Create a non-root user and set up writable directories.
+RUN groupadd -r pawtal \
+    && useradd -r -g pawtal -d /app -s /sbin/nologin pawtal \
+    && mkdir -p data uploads \
+    && chown -R pawtal:pawtal /app/data /app/uploads ./pawtal ./entrypoint.sh
+
+USER pawtal
 
 # ── Environment defaults ───────────────────────────────────────────────────────
 # These can all be overridden at runtime via docker-compose environment or
@@ -65,5 +69,8 @@ ENV ORIGIN=http://localhost:8080
 ENV FRONTEND_ORIGIN=http://127.0.0.1:3000
 
 EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -sf http://localhost:8080/api/health || exit 1
 
 ENTRYPOINT ["./entrypoint.sh"]

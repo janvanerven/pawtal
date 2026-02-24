@@ -10,9 +10,9 @@ mod tasks;
 
 use axum::{
     body::Body,
-    extract::State,
+    extract::{DefaultBodyLimit, State},
     http::{Request, Response, StatusCode},
-    middleware::from_fn_with_state,
+    middleware::{from_fn, from_fn_with_state},
     response::IntoResponse,
     routing::{delete, get, post, put},
     Json, Router,
@@ -30,6 +30,9 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 pub struct AppState {
     pub db: SqlitePool,
     pub config: config::Config,
+    /// Shared HTTP client for outbound requests (OAuth2, etc.). Reusing a
+    /// single client avoids per-request connection pool and TLS overhead.
+    pub http_client: reqwest::Client,
 }
 
 #[tokio::main]
@@ -87,7 +90,11 @@ async fn main() {
     let frontend_origin = std::env::var("FRONTEND_ORIGIN")
         .unwrap_or_else(|_| "http://127.0.0.1:3000".to_string());
 
-    let state = AppState { db: pool, config };
+    let state = AppState {
+        db: pool,
+        config,
+        http_client: reqwest::Client::new(),
+    };
 
     // ── Route groups ──────────────────────────────────────────────────────────
     //
@@ -116,6 +123,21 @@ async fn main() {
 
     // 3. Admin routes — protected by the require_auth middleware layer.
     //    Every route added here will require a valid session cookie.
+
+    // Admin-only routes — require both authentication AND the "admin" role.
+    let admin_only_routes = Router::new()
+        .route("/api/admin/users", get(api::auth::list_users))
+        .route(
+            "/api/admin/users/{id}/role",
+            put(api::auth::update_user_role),
+        )
+        .route(
+            "/api/admin/settings",
+            get(api::settings::admin_get).put(api::settings::admin_update),
+        )
+        .route("/api/admin/trash/empty", post(api::trash::empty))
+        .layer(from_fn(auth::middleware::require_admin));
+
     let admin_routes = Router::new()
         .route("/api/admin/me", get(api::auth::me))
         // Articles CRUD
@@ -181,11 +203,6 @@ async fn main() {
             "/api/admin/categories/{id}",
             put(api::categories::update).delete(api::categories::delete),
         )
-        // Settings
-        .route(
-            "/api/admin/settings",
-            get(api::settings::admin_get).put(api::settings::admin_update),
-        )
         // Menus
         .route(
             "/api/admin/menus/{name}",
@@ -208,12 +225,11 @@ async fn main() {
         )
         // Trash
         .route("/api/admin/trash", get(api::trash::list))
-        .route("/api/admin/trash/empty", post(api::trash::empty))
         // Audit log
         .route("/api/admin/audit-log", get(api::audit::list))
         // Search (admin — includes unpublished content)
         .route("/api/admin/search", get(api::search::admin_search))
-        // Media
+        // Media — upload has a 50 MB body size limit
         .route(
             "/api/admin/media",
             get(api::media::admin_list).post(api::media::admin_upload),
@@ -222,12 +238,8 @@ async fn main() {
             "/api/admin/media/{id}",
             delete(api::media::admin_delete),
         )
-        // Users
-        .route("/api/admin/users", get(api::auth::list_users))
-        .route(
-            "/api/admin/users/{id}/role",
-            put(api::auth::update_user_role),
-        )
+        .layer(DefaultBodyLimit::max(50 * 1024 * 1024)) // 50 MB
+        .merge(admin_only_routes)
         .layer(from_fn_with_state(
             state.clone(),
             auth::middleware::require_auth,
@@ -240,9 +252,8 @@ async fn main() {
     // router tree. We clone `uploads_dir` here because `state` is moved below.
     let uploads_dir = state.config.uploads_dir.clone();
 
-    // Build a shared reqwest client for the SvelteKit proxy. A single client
-    // reuses the underlying connection pool across requests.
-    let http_client = reqwest::Client::new();
+    // Reuse the shared reqwest client from AppState for the SvelteKit proxy.
+    let http_client = state.http_client.clone();
 
     let app = Router::new()
         .merge(public_routes)
@@ -317,7 +328,8 @@ async fn proxy_to_frontend(
 
     // Collect the incoming body bytes. For typical frontend requests (HTML,
     // JS, CSS) there is no body, so this is a near-zero-cost no-op.
-    let body_bytes = match axum::body::to_bytes(req.into_body(), usize::MAX).await {
+    // Cap at 10 MB to prevent memory exhaustion via the proxy path.
+    let body_bytes = match axum::body::to_bytes(req.into_body(), 10 * 1024 * 1024).await {
         Ok(b) => b,
         Err(e) => {
             warn!("proxy: failed to read request body: {e}");

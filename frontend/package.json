@@ -12,8 +12,6 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
 	},
 	"devDependencies": {
-		"@fontsource/inter": "^5.2.8",
-		"@fontsource/nunito": "^5.2.7",
 		"@sveltejs/adapter-auto": "^7.0.0",
 		"@sveltejs/adapter-node": "^5.5.3",
 		"@sveltejs/kit": "^2.50.2",
@@ -24,6 +22,8 @@
 		"vite": "^7.3.1"
 	},
 	"dependencies": {
+		"@fontsource/dm-sans": "^5.2.8",
+		"@fontsource/space-grotesk": "^5.2.10",
 		"@tiptap/core": "^3.20.0",
 		"@tiptap/extension-image": "^3.20.0",
 		"@tiptap/extension-link": "^3.20.0",

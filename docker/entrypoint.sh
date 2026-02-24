@@ -10,16 +10,21 @@ set -euo pipefail
 #     proxies every other request to the SvelteKit server on port 3000.
 #   • Only port 8080 is published to the host.
 
+# ── Fix ownership of writable directories ─────────────────────────────────────
+# Volume mounts (bind or named) may arrive with root ownership.  Ensure the
+# pawtal user can write to data/ and uploads/ before dropping privileges.
+chown -R pawtal:pawtal /app/data /app/uploads
+
 # Pass the public base URL through to SvelteKit as ORIGIN so its built-in CSRF
 # protection accepts requests. Falls back to BASE_URL if ORIGIN is unset.
 export ORIGIN="${ORIGIN:-${BASE_URL:-http://localhost:8080}}"
 
 echo "Starting SvelteKit Node server on port 3000..."
-cd /app/frontend && PORT=3000 node build/index.js &
+cd /app/frontend && gosu pawtal node build/index.js &
 SVELTEKIT_PID=$!
 
 echo "Starting Axum API server on port 8080..."
-cd /app && ./pawtal &
+cd /app && gosu pawtal ./pawtal &
 AXUM_PID=$!
 
 # Forward SIGTERM/SIGINT to both children so Docker stop is clean.

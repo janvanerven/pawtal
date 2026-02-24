@@ -31,7 +31,7 @@ RUN npm run build
 FROM node:22-bookworm-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates libsqlite3-0 curl \
+    && apt-get install -y --no-install-recommends ca-certificates libsqlite3-0 curl gosu \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -50,12 +50,12 @@ COPY docker/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
 # Create a non-root user and set up writable directories.
+# NOTE: We do NOT set USER here — the entrypoint runs as root to fix
+# volume-mount ownership, then drops to pawtal via gosu.
 RUN groupadd -r pawtal \
     && useradd -r -g pawtal -d /app -s /sbin/nologin pawtal \
     && mkdir -p data uploads \
     && chown -R pawtal:pawtal /app/data /app/uploads ./pawtal ./entrypoint.sh
-
-USER pawtal
 
 # ── Environment defaults ───────────────────────────────────────────────────────
 # These can all be overridden at runtime via docker-compose environment or

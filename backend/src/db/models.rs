@@ -31,6 +31,7 @@ pub struct Page {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub trashed_at: Option<DateTime<Utc>>,
+    pub template: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -56,6 +57,8 @@ pub struct Article {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub trashed_at: Option<DateTime<Utc>>,
+    pub cover_image_id: Option<String>,
+    pub reading_time_minutes: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -149,6 +152,7 @@ pub struct CreatePage {
     pub status: Option<String>,
     pub publish_at: Option<DateTime<Utc>>,
     pub category_ids: Option<Vec<String>>,
+    pub template: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -159,6 +163,7 @@ pub struct UpdatePage {
     pub status: Option<String>,
     pub publish_at: Option<DateTime<Utc>>,
     pub category_ids: Option<Vec<String>>,
+    pub template: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -170,6 +175,7 @@ pub struct CreateArticle {
     pub status: Option<String>,
     pub publish_at: Option<DateTime<Utc>>,
     pub category_ids: Option<Vec<String>>,
+    pub cover_image_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -181,6 +187,7 @@ pub struct UpdateArticle {
     pub status: Option<String>,
     pub publish_at: Option<DateTime<Utc>>,
     pub category_ids: Option<Vec<String>>,
+    pub cover_image_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

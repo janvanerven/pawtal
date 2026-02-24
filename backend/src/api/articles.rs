@@ -67,6 +67,19 @@ pub async fn public_get_by_slug(
     Ok(Json(article))
 }
 
+/// `GET /api/articles/:slug/related`
+///
+/// Returns up to 4 published articles that share at least one category with
+/// the requested article. Unauthenticated — only published content is visible.
+pub async fn public_related(
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+) -> AppResult<Json<Vec<Article>>> {
+    let article = svc::get_article_by_slug(&state.db, &slug).await?;
+    let related = svc::get_related_articles(&state.db, &article.id, 4).await?;
+    Ok(Json(related))
+}
+
 // ─── Admin endpoints ──────────────────────────────────────────────────────────
 
 /// `GET /api/admin/articles`

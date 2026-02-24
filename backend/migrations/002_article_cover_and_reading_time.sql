@@ -1,0 +1,2 @@
+ALTER TABLE articles ADD COLUMN cover_image_id TEXT REFERENCES media(id) ON DELETE SET NULL;
+ALTER TABLE articles ADD COLUMN reading_time_minutes INTEGER NOT NULL DEFAULT 0;

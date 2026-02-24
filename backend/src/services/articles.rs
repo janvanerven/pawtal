@@ -38,7 +38,7 @@ pub async fn list_articles(
     let (rows, total) = if let Some(status) = status_filter {
         let rows = sqlx::query_as::<_, Article>(
             "SELECT id, title, slug, short_text, content, status, publish_at, author_id, \
-                    created_at, updated_at, trashed_at \
+                    created_at, updated_at, trashed_at, cover_image_id, reading_time_minutes \
              FROM articles \
              WHERE status = ? \
              ORDER BY updated_at DESC \
@@ -60,7 +60,7 @@ pub async fn list_articles(
     } else {
         let rows = sqlx::query_as::<_, Article>(
             "SELECT id, title, slug, short_text, content, status, publish_at, author_id, \
-                    created_at, updated_at, trashed_at \
+                    created_at, updated_at, trashed_at, cover_image_id, reading_time_minutes \
              FROM articles \
              WHERE status != 'trashed' \
              ORDER BY updated_at DESC \
@@ -101,7 +101,7 @@ pub async fn list_published_articles(
 
     let rows = sqlx::query_as::<_, Article>(
         "SELECT id, title, slug, short_text, content, status, publish_at, author_id, \
-                created_at, updated_at, trashed_at \
+                created_at, updated_at, trashed_at, cover_image_id, reading_time_minutes \
          FROM articles \
          WHERE status = 'published' \
          ORDER BY created_at DESC \
@@ -130,7 +130,7 @@ pub async fn list_published_articles(
 pub async fn get_article(pool: &SqlitePool, id: &str) -> AppResult<Article> {
     sqlx::query_as::<_, Article>(
         "SELECT id, title, slug, short_text, content, status, publish_at, author_id, \
-                created_at, updated_at, trashed_at \
+                created_at, updated_at, trashed_at, cover_image_id, reading_time_minutes \
          FROM articles WHERE id = ?",
     )
     .bind(id)
@@ -144,7 +144,7 @@ pub async fn get_article(pool: &SqlitePool, id: &str) -> AppResult<Article> {
 pub async fn get_article_by_slug(pool: &SqlitePool, slug: &str) -> AppResult<Article> {
     sqlx::query_as::<_, Article>(
         "SELECT id, title, slug, short_text, content, status, publish_at, author_id, \
-                created_at, updated_at, trashed_at \
+                created_at, updated_at, trashed_at, cover_image_id, reading_time_minutes \
          FROM articles WHERE slug = ? AND status = 'published'",
     )
     .bind(slug)
@@ -176,11 +176,13 @@ pub async fn create_article(
     let short_text = input.short_text.unwrap_or_default();
     let content = input.content.unwrap_or_default();
     let status = input.status.unwrap_or_else(|| "draft".to_owned());
+    let reading_time = estimate_reading_time(&content);
 
     sqlx::query(
         "INSERT INTO articles \
-             (id, title, slug, short_text, content, status, publish_at, author_id) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+             (id, title, slug, short_text, content, status, publish_at, author_id, \
+              cover_image_id, reading_time_minutes) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&id)
     .bind(&input.title)
@@ -190,6 +192,8 @@ pub async fn create_article(
     .bind(&status)
     .bind(&input.publish_at)
     .bind(author_id)
+    .bind(&input.cover_image_id)
+    .bind(reading_time)
     .execute(pool)
     .await?;
 
@@ -236,6 +240,13 @@ pub async fn update_article(
     } else {
         existing.publish_at
     };
+    // Preserve the existing cover image if a new one was not supplied.
+    let cover_image_id = if input.cover_image_id.is_some() {
+        input.cover_image_id
+    } else {
+        existing.cover_image_id.clone()
+    };
+    let reading_time = estimate_reading_time(&content);
 
     // Compute the new slug and check uniqueness only when it changed.
     let slug = input.slug.unwrap_or_else(|| existing.slug.clone());
@@ -246,6 +257,7 @@ pub async fn update_article(
     sqlx::query(
         "UPDATE articles \
          SET title = ?, slug = ?, short_text = ?, content = ?, status = ?, publish_at = ?, \
+             cover_image_id = ?, reading_time_minutes = ?, \
              updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') \
          WHERE id = ?",
     )
@@ -255,6 +267,8 @@ pub async fn update_article(
     .bind(&content)
     .bind(&status)
     .bind(&publish_at)
+    .bind(&cover_image_id)
+    .bind(reading_time)
     .bind(id)
     .execute(pool)
     .await?;
@@ -399,12 +413,63 @@ pub async fn restore_revision(
         status: None,
         publish_at: None,
         category_ids: None,
+        cover_image_id: None,
     };
 
     update_article(pool, article_id, input, user_id).await
 }
 
+/// Returns published articles that share at least one category with the given
+/// article. Used to populate a "related articles" section on article detail pages.
+pub async fn get_related_articles(
+    pool: &SqlitePool,
+    article_id: &str,
+    limit: i64,
+) -> AppResult<Vec<Article>> {
+    let articles = sqlx::query_as::<_, Article>(
+        "SELECT DISTINCT a.id, a.title, a.slug, a.short_text, a.content, a.status, \
+                a.publish_at, a.author_id, a.created_at, a.updated_at, a.trashed_at, \
+                a.cover_image_id, a.reading_time_minutes \
+         FROM articles a \
+         INNER JOIN article_categories ac ON ac.article_id = a.id \
+         WHERE ac.category_id IN (SELECT category_id FROM article_categories WHERE article_id = ?) \
+           AND a.id != ? \
+           AND a.status = 'published' \
+         ORDER BY a.created_at DESC \
+         LIMIT ?",
+    )
+    .bind(article_id)
+    .bind(article_id)
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(articles)
+}
+
 // ─── Internal helpers ─────────────────────────────────────────────────────────
+
+/// Estimates reading time from HTML content at ~200 words per minute.
+///
+/// Strips HTML tags by walking the characters, then counts whitespace-delimited
+/// words. The minimum returned value is 1 minute to avoid showing "0 min read".
+fn estimate_reading_time(html: &str) -> i32 {
+    let mut in_tag = false;
+    let mut text = String::new();
+    for c in html.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => {
+                in_tag = false;
+                text.push(' ');
+            }
+            _ if !in_tag => text.push(c),
+            _ => {}
+        }
+    }
+    let word_count = text.split_whitespace().count();
+    ((word_count as f64) / 200.0).ceil().max(1.0) as i32
+}
 
 /// Inserts a revision row for the given article's current title, short_text,
 /// and content.

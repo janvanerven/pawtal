@@ -3,6 +3,7 @@ pub mod articles;
 pub mod audit;
 pub mod auth;
 pub mod categories;
+pub mod feed;
 pub mod media;
 pub mod menus;
 pub mod pages;

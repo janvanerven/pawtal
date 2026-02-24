@@ -100,6 +100,8 @@ async fn main() {
         .route("/api/pages/{slug}", get(api::pages::public_get_by_slug))
         .route("/api/articles", get(api::articles::public_list))
         .route("/api/articles/{slug}", get(api::articles::public_get_by_slug))
+        .route("/api/articles/{slug}/related", get(api::articles::public_related))
+        .route("/feed.xml", get(api::feed::atom_feed))
         .route("/api/menus/{name}", get(api::menus::public_get))
         .route("/api/settings/public", get(api::settings::public_get))
         .route("/api/apps", get(api::apps::public_list))

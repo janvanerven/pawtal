@@ -35,7 +35,7 @@ pub async fn list_pages(
     let (rows, total) = if let Some(status) = status_filter {
         let rows = sqlx::query_as::<_, Page>(
             "SELECT id, title, slug, content, status, publish_at, author_id, \
-                    created_at, updated_at, trashed_at \
+                    created_at, updated_at, trashed_at, template \
              FROM pages \
              WHERE status = ? \
              ORDER BY updated_at DESC \
@@ -56,7 +56,7 @@ pub async fn list_pages(
     } else {
         let rows = sqlx::query_as::<_, Page>(
             "SELECT id, title, slug, content, status, publish_at, author_id, \
-                    created_at, updated_at, trashed_at \
+                    created_at, updated_at, trashed_at, template \
              FROM pages \
              WHERE status != 'trashed' \
              ORDER BY updated_at DESC \
@@ -87,7 +87,7 @@ pub async fn list_pages(
 pub async fn get_page(pool: &SqlitePool, id: &str) -> AppResult<Page> {
     sqlx::query_as::<_, Page>(
         "SELECT id, title, slug, content, status, publish_at, author_id, \
-                created_at, updated_at, trashed_at \
+                created_at, updated_at, trashed_at, template \
          FROM pages WHERE id = ?",
     )
     .bind(id)
@@ -101,7 +101,7 @@ pub async fn get_page(pool: &SqlitePool, id: &str) -> AppResult<Page> {
 pub async fn get_page_by_slug(pool: &SqlitePool, slug: &str) -> AppResult<Page> {
     sqlx::query_as::<_, Page>(
         "SELECT id, title, slug, content, status, publish_at, author_id, \
-                created_at, updated_at, trashed_at \
+                created_at, updated_at, trashed_at, template \
          FROM pages WHERE slug = ? AND status = 'published'",
     )
     .bind(slug)
@@ -132,10 +132,11 @@ pub async fn create_page(
     let id = Uuid::new_v4().to_string();
     let content = input.content.unwrap_or_default();
     let status = input.status.unwrap_or_else(|| "draft".to_owned());
+    let template = input.template.unwrap_or_else(|| "default".to_owned());
 
     sqlx::query(
-        "INSERT INTO pages (id, title, slug, content, status, publish_at, author_id) \
-         VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO pages (id, title, slug, content, status, publish_at, author_id, template) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&id)
     .bind(&input.title)
@@ -144,6 +145,7 @@ pub async fn create_page(
     .bind(&status)
     .bind(&input.publish_at)
     .bind(author_id)
+    .bind(&template)
     .execute(pool)
     .await?;
 
@@ -189,6 +191,7 @@ pub async fn update_page(
     } else {
         existing.publish_at
     };
+    let template = input.template.unwrap_or_else(|| existing.template.clone());
 
     // Compute the new slug and check uniqueness only when it changed.
     let slug = input.slug.unwrap_or_else(|| existing.slug.clone());
@@ -198,7 +201,7 @@ pub async fn update_page(
 
     sqlx::query(
         "UPDATE pages \
-         SET title = ?, slug = ?, content = ?, status = ?, publish_at = ?, \
+         SET title = ?, slug = ?, content = ?, status = ?, publish_at = ?, template = ?, \
              updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') \
          WHERE id = ?",
     )
@@ -207,6 +210,7 @@ pub async fn update_page(
     .bind(&content)
     .bind(&status)
     .bind(&publish_at)
+    .bind(&template)
     .bind(id)
     .execute(pool)
     .await?;
@@ -347,6 +351,7 @@ pub async fn restore_revision(
         status: None,
         publish_at: None,
         category_ids: None,
+        template: None,
     };
 
     update_page(pool, page_id, input, user_id).await

@@ -35,7 +35,7 @@ pub struct TrashResponse {
 pub async fn list(State(state): State<AppState>) -> AppResult<Json<TrashResponse>> {
     let pages = sqlx::query_as::<_, Page>(
         "SELECT id, title, slug, content, status, publish_at, author_id, \
-                created_at, updated_at, trashed_at \
+                created_at, updated_at, trashed_at, template \
          FROM pages \
          WHERE status = 'trashed' \
          ORDER BY trashed_at DESC",
@@ -45,7 +45,7 @@ pub async fn list(State(state): State<AppState>) -> AppResult<Json<TrashResponse
 
     let articles = sqlx::query_as::<_, Article>(
         "SELECT id, title, slug, short_text, content, status, publish_at, author_id, \
-                created_at, updated_at, trashed_at \
+                created_at, updated_at, trashed_at, cover_image_id, reading_time_minutes \
          FROM articles \
          WHERE status = 'trashed' \
          ORDER BY trashed_at DESC",
